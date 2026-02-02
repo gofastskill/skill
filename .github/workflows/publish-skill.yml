@@ -4,8 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'SKILL.md'
-      - 'skill-project.toml'
+      - 'skill/**'
       - '.github/workflows/publish-skill.yml'
   workflow_dispatch:
     inputs:

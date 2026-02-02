@@ -5,17 +5,16 @@ This repository contains FastSkill skill for Claude Code.
 ## Repository Structure
 
 ```
-.
-├── SKILL.md                     # Skill documentation
-├── skill-project.toml             # Skill configuration and metadata
-└── .github/
-    └── workflows/
-        └── publish-skill.yml  # CI/CD workflow for packaging and publishing
+gofastskill/skill/
+├── skill-project.toml            # Repository configuration (project-level)
+└── skill/                       # FastSkill skill subdirectory
+    ├── SKILL.md                 # Skill documentation
+    └── skill-project.toml       # Skill configuration and metadata
 ```
 
 ## Installation
 
-Install this skill using FastSkill CLI:
+Install this skill using FastSkill CLI from your project root:
 
 ```bash
 fastskill add https://github.com/gofastskill/skill.git
@@ -25,7 +24,7 @@ fastskill add https://github.com/gofastskill/skill.git
 
 To make changes to the skill:
 
-1. Edit files in repository root (SKILL.md, skill-project.toml)
+1. Edit files in `skill/` subdirectory
 2. Commit and push to `main` branch
 3. The CI/CD workflow will automatically package and publish a new release
 
@@ -33,7 +32,7 @@ To make changes to the skill:
 
 The GitHub Actions workflow in `.github/workflows/publish-skill.yml`:
 
-- Detects changes to `SKILL.md` or `skill-project.toml`
+- Detects changes to `skill/` directory
 - Packages skill using FastSkill CLI
 - Creates a GitHub release with the packaged skill artifact
 - Uses GitHub App token for release operations
