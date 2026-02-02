@@ -4,7 +4,8 @@ on:
   push:
     branches: [main]
     paths:
-      - 'skills/**'
+      - 'SKILL.md'
+      - 'skill-project.toml'
       - '.github/workflows/publish-skill.yml'
   workflow_dispatch:
     inputs:
@@ -53,16 +54,17 @@ jobs:
       - name: Get version
         id: version
         run: |
-          VERSION=$(grep '^version = ' skills/fastskill/skill-project.toml | sed 's/version = "\([^"]*\)"/\1/')
+          VERSION=$(grep '^version = ' skill-project.toml | sed 's/version = "\([^"]*\)"/\1/')
           echo "version=$VERSION" >> $GITHUB_OUTPUT
       
       - name: Package skill using FastSkill
         if: steps.detect.outputs.changed == 'true' || steps.detect.outputs.force == 'true'
         run: |
           # Package fastskill skill using fastskill CLI
-          # Skills are in the skills/ subdirectory
+          # Skills are in repository root
           fastskill package \
-            --skills-dir skills \
+            --skills-dir . \
+            --skills fastskill \
             --force \
             --output ./artifacts
       
@@ -112,8 +114,8 @@ jobs:
             
             ## Contents
             
-            - skills/SKILL.md: Comprehensive skill documentation
-            - skills/skill-project.toml: Skill configuration and metadata
+            - SKILL.md: Comprehensive skill documentation
+            - skill-project.toml: Skill configuration and metadata
           files: ./artifacts/*.zip
           fail_on_unmatched_files: false
           draft: false
