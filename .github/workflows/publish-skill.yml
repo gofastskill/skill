@@ -77,7 +77,7 @@ jobs:
             fi
           done
         env:
-          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
       
       - name: Generate GitHub App Token
         id: app-token
