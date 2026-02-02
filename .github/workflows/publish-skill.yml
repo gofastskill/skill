@@ -41,7 +41,7 @@ jobs:
             echo "changed=true" >> $GITHUB_OUTPUT
             echo "force=$FORCE" >> $GITHUB_OUTPUT
           else
-            CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD | grep '^skill/' || echo "")
+            CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD | grep -E '^(SKILL\.md|skill-project\.toml|\.github/workflows)' || echo "")
             if [ -n "$CHANGED_FILES" ]; then
               echo "changed=true" >> $GITHUB_OUTPUT
               echo "force=true" >> $GITHUB_OUTPUT
@@ -54,16 +54,17 @@ jobs:
       - name: Get version
         id: version
         run: |
-          VERSION=$(grep '^version = ' skill/skill-project.toml | sed 's/version = "\([^"]*\)"/\1/')
+          VERSION=$(grep '^version = ' skill-project.toml | sed 's/version = "\([^"]*\)"/\1/')
           echo "version=$VERSION" >> $GITHUB_OUTPUT
       
       - name: Package skill using FastSkill
         if: steps.detect.outputs.changed == 'true' || steps.detect.outputs.force == 'true'
         run: |
           # Package fastskill skill using fastskill CLI
+          # Files are in the repository root, not in a skill/ subdirectory
           fastskill package \
             --skills-dir . \
-            --skills skill \
+            --force \
             --output ./artifacts
       
       - name: Generate GitHub App Token
@@ -101,7 +102,7 @@ jobs:
             
             - SKILL.md: Comprehensive skill documentation
             - skill-project.toml: Skill configuration and metadata
-          files: ./artifacts/skill-*.zip
+          files: ./artifacts/*.zip
           fail_on_unmatched_files: false
           draft: false
           prerelease: false
