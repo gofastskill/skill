@@ -7,7 +7,7 @@ This repository contains FastSkill skill for Claude Code.
 ```
 gofastskill/skill/
 ├── skill-project.toml            # Repository configuration (project-level)
-└── skill/                       # FastSkill skill subdirectory
+└── fastskill/                       # FastSkill skill subdirectory
     ├── SKILL.md                 # Skill documentation
     └── skill-project.toml       # Skill configuration and metadata
 ```
