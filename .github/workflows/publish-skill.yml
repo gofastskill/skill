@@ -4,8 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'SKILL.md'
-      - 'skill-project.toml'
+      - 'skills/**'
       - '.github/workflows/publish-skill.yml'
   workflow_dispatch:
     inputs:
@@ -41,7 +40,7 @@ jobs:
             echo "changed=true" >> $GITHUB_OUTPUT
             echo "force=$FORCE" >> $GITHUB_OUTPUT
           else
-            CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD | grep -E '^(SKILL\.md|skill-project\.toml|\.github/workflows)' || echo "")
+            CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD | grep '^skills/' || echo "")
             if [ -n "$CHANGED_FILES" ]; then
               echo "changed=true" >> $GITHUB_OUTPUT
               echo "force=true" >> $GITHUB_OUTPUT
@@ -54,16 +53,16 @@ jobs:
       - name: Get version
         id: version
         run: |
-          VERSION=$(grep '^version = ' skill-project.toml | sed 's/version = "\([^"]*\)"/\1/')
+          VERSION=$(grep '^version = ' skills/skill-project.toml | sed 's/version = "\([^"]*\)"/\1/')
           echo "version=$VERSION" >> $GITHUB_OUTPUT
       
       - name: Package skill using FastSkill
         if: steps.detect.outputs.changed == 'true' || steps.detect.outputs.force == 'true'
         run: |
           # Package fastskill skill using fastskill CLI
-          # Files are in the repository root, not in a skill/ subdirectory
+          # Skills are in the skills/ subdirectory
           fastskill package \
-            --skills-dir . \
+            --skills-dir skills \
             --force \
             --output ./artifacts
       
@@ -100,8 +99,8 @@ jobs:
             
             ## Contents
             
-            - SKILL.md: Comprehensive skill documentation
-            - skill-project.toml: Skill configuration and metadata
+            - skills/SKILL.md: Comprehensive skill documentation
+            - skills/skill-project.toml: Skill configuration and metadata
           files: ./artifacts/*.zip
           fail_on_unmatched_files: false
           draft: false
