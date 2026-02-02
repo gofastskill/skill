@@ -13,8 +13,6 @@ FastSkill is a package manager and operational toolkit for Claude Code-compatibl
 
 FastSkill extends Anthropic's standardized Skills format with registry services, semantic search, version management, and deployment tooling. Use FastSkill to manage skill lifecycles from development to production distribution.
 
-See [Reference Guide](references/SKILL-REFERENCE.md) for detailed API documentation and advanced usage patterns.
-
 ## Installation
 
 Install FastSkill CLI:
