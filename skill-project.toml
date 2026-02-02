@@ -1,12 +1,12 @@
 [metadata]
 id = "gofastskill-skill"
-version = "1.0.0"
+version = "1.1.0"
 name = "gofastskill-skill"
-description = "Repository for the FastSkill skill package"
+description = "Repository for FastSkill skill package"
 type = "repository"
 
 [dependencies]
-fastskill = { source = "local", path = "skill" }
+fastskill = { source = "local", path = "fastskill" }
 
 [tool.fastskill]
-skills_directory = "skill"
+skills_directory = "fastskill"

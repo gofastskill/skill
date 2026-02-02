@@ -10,3 +10,5 @@ capabilities = ["skill-installation", "skill-packaging", "skill-publishing", "se
 
 [dependencies]
 
+    fastskill = { source = "local", path = "fastskill" }
+
