@@ -53,7 +53,7 @@ jobs:
       - name: Get version
         id: version
         run: |
-          VERSION=$(grep '^version = ' skill-project.toml | sed 's/version = "\([^"]*\)"/\1/')
+          VERSION=$(grep '^version = ' fastskill/skill-project.toml | sed 's/version = "\([^"]*\)"/\1/')
           echo "version=$VERSION" >> $GITHUB_OUTPUT
       
       - name: Package skill using FastSkill
