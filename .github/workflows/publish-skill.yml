@@ -53,7 +53,7 @@ jobs:
       - name: Get version
         id: version
         run: |
-          VERSION=$(grep '^version = ' skills/skill-project.toml | sed 's/version = "\([^"]*\)"/\1/')
+          VERSION=$(grep '^version = ' skills/fastskill/skill-project.toml | sed 's/version = "\([^"]*\)"/\1/')
           echo "version=$VERSION" >> $GITHUB_OUTPUT
       
       - name: Package skill using FastSkill
@@ -65,6 +65,19 @@ jobs:
             --skills-dir skills \
             --force \
             --output ./artifacts
+      
+      - name: Delete old releases
+        if: steps.detect.outputs.changed == 'true' || steps.detect.outputs.force == 'true'
+        run: |
+          # Delete any releases with incorrect or old tags
+          for tag in $(gh release list --json tagName --jq '.[].tagName'); do
+            if [ "$tag" = "v" ] || [ "$tag" != "v${{ steps.version.outputs.version }}" ]; then
+              echo "Deleting release $tag"
+              gh release delete "$tag" --yes --cleanup-tag || true
+            fi
+          done
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
       
       - name: Generate GitHub App Token
         id: app-token
