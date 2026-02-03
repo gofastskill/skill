@@ -95,6 +95,9 @@ Install skills from various sources:
 # From git repository
 fastskill add https://github.com/org/skill.git
 
+# From git repository subdirectory (GitHub tree URL: tree/<branch>/<path/to/skill>)
+fastskill add "https://github.com/org/repo/tree/main/path/to/skill"
+
 # From local folder
 fastskill add ./local-skill
 
