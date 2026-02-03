@@ -1,12 +1,11 @@
 [metadata]
-id = "gofastskill-skill"
-version = "1.1.0"
-name = "gofastskill-skill"
-description = "Repository for FastSkill skill package"
-type = "repository"
+id = "fastskill"
+version = "1.0.2"
+name = "fastskill"
+description = "Package manager and operational toolkit for AI Agent skills. This skill should be used when installing, managing, packaging, publishing, or discovering skills; setting up skill registries; configuring repositories; implementing CI/CD workflows for skills; performing semantic search across skill collections."
+author = "Alexandre Oliveira"
+tags = ["tools", "package-manager", "skill-management", "registry", "ci-cd", "fastskill-cli", "versioning"]
+capabilities = ["skill-installation", "skill-packaging", "skill-publishing", "semantic-search", "registry-management", "version-management", "cli-commands"]
 
 [dependencies]
-fastskill = { source = "local", path = "fastskill" }
 
-[tool.fastskill]
-skills_directory = "fastskill"
