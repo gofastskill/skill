@@ -1,0 +1,14 @@
+{
+  "suite_pass": true,
+  "agent": "codex",
+  "model": null,
+  "total_cases": 1,
+  "passed": 1,
+  "failed": 0,
+  "run_dir": "evals/fixtures/fail",
+  "checks_path": "evals/checks.toml",
+  "skill_project_root": ".",
+  "cases": [
+    { "id": "no-trigger", "status": "passed", "command_count": 2, "input_tokens": null, "output_tokens": null }
+  ]
+}

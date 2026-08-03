@@ -1,0 +1,104 @@
+name: Skill evals
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'fastskill/skill-project.toml'
+      - 'fastskill/references/eval.md'
+      - 'evals/**'
+      - '.github/workflows/skill-evals.yml'
+  pull_request:
+    paths:
+      - 'fastskill/skill-project.toml'
+      - 'fastskill/references/eval.md'
+      - 'evals/**'
+      - '.github/workflows/skill-evals.yml'
+  workflow_dispatch:
+    inputs:
+      agent:
+        description: 'Agent CLI to run live evals with'
+        type: choice
+        options: [codex, claude]
+        default: codex
+
+concurrency:
+  group: skill-evals-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ----------------------------------------------------------------------------
+  # Deterministic, always-on: validate the eval config, suite, and checks schema.
+  # No agent, no network calls to an LLM.
+  # ----------------------------------------------------------------------------
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install FastSkill CLI
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/gofastskill/fastskill/main/scripts/install.sh | bash
+          fastskill --version
+      - name: Validate eval configuration
+        run: |
+          cd fastskill
+          fastskill eval validate
+
+  # ----------------------------------------------------------------------------
+  # Deterministic, always-on: exercise the checks engine offline via `eval score`
+  # against committed run fixtures — one that must PASS and one that must FAIL.
+  # Proves checks.toml scores recorded output correctly, with no agent.
+  # ----------------------------------------------------------------------------
+  score-fixtures:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install FastSkill CLI
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/gofastskill/fastskill/main/scripts/install.sh | bash
+      - name: PASS fixture must score green
+        run: fastskill eval score --run-dir evals/fixtures/pass
+      - name: FAIL fixture must score red
+        run: |
+          if fastskill eval score --run-dir evals/fixtures/fail; then
+            echo "::error::FAIL fixture unexpectedly passed — checks engine regression"
+            exit 1
+          fi
+          echo "FAIL fixture correctly reported a failing suite."
+
+  # ----------------------------------------------------------------------------
+  # Opt-in (workflow_dispatch): run the suite against a REAL agent.
+  # Costs LLM tokens and needs API-key secrets, so it never runs on push/PR.
+  # NOTE: the shipped fastskill CLI pins an aikit rev whose runnable agents are
+  # codex/claude/gemini/opencode — `pi` and `cursor` are NOT yet supported.
+  # ----------------------------------------------------------------------------
+  live-eval:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install FastSkill CLI
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/gofastskill/fastskill/main/scripts/install.sh | bash
+          fastskill --version
+      - name: Install agent CLI (${{ inputs.agent }})
+        run: |
+          case "${{ inputs.agent }}" in
+            codex)  npm install -g @openai/codex ;;
+            claude) npm install -g @anthropic-ai/claude-code ;;
+          esac
+      - name: Run live evals
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          cd fastskill
+          fastskill eval run --agent "${{ inputs.agent }}" --output-dir ../eval-runs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: eval-run-${{ inputs.agent }}
+          path: eval-runs/

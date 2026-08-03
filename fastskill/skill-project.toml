@@ -15,5 +15,6 @@ skills_directory = "fastskill"
 
 [tool.fastskill.eval]
 prompts = "../evals/prompts.csv"
+checks  = "../evals/checks.toml"
 timeout_seconds = 120
 fail_on_missing_agent = true

@@ -1,0 +1,19 @@
+# Deterministic scoring applied to every eval case's captured stdout + trace.
+# Consumed by `fastskill eval run` (live) and `fastskill eval score` (offline).
+# Schema + check types: fastskill/references/eval.md
+#
+# NOTE: checks are GLOBAL — the same set is applied to every case in the suite,
+# so they assert properties that must hold for all (positive) cases.
+
+# The skill's guidance must reference the fastskill CLI.
+[[check]]
+name = "trigger_expectation"
+pattern = "fastskill"
+expected = true
+required = true
+
+# Guard against runaway agent loops: bound the number of raw trace events.
+[[check]]
+name = "max_command_count"
+limit = 100
+required = true
