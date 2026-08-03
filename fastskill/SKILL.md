@@ -1,38 +1,36 @@
 ---
 name: fastskill
-version: 1.0.0
-description: Package manager and operational toolkit for Claude Code-compatible skills. Use this skill when installing, managing, packaging, publishing, or discovering skills; setting up skill registries; configuring repositories; implementing CI/CD workflows for skills; or performing semantic search across skill collections.
+version: 1.1.0
+description: Package manager and operational toolkit for Claude Code-compatible skills. Use this skill when installing, managing, discovering, or analyzing skills; configuring repositories; running skill evaluations (`fastskill eval`) or the optimization loop (`fastskill optimize`); serving skills over HTTP/MCP; or building marketplace catalogs. See references/eval.md for eval setup in full.
 license: Apache-2.0
 ---
 
 # FastSkill
 
-FastSkill is a package manager and operational toolkit for Claude Code-compatible skills. It provides discovery, installation, versioning, deployment, and semantic search capabilities for skills at scale.
+FastSkill is a package manager and operational toolkit for Claude Code-compatible skills. It provides discovery, installation, versioning, semantic search, quality evals, and a local HTTP/MCP server for skills at scale.
 
 ## Overview
 
-FastSkill extends Anthropic's standardized Skills format with registry services, semantic search, version management, and deployment tooling. Use FastSkill to manage skill lifecycles from development to production distribution.
+FastSkill follows Anthropic's standardized `SKILL.md` skill layout and adds a manifest (`skill-project.toml`), a lockfile (`skills.lock`), semantic search, evaluation suites, an optimization loop, and repository/marketplace tooling. Modern agents (Claude Code, Cursor, …) read installed skills directly from the skills directory — **there is no metadata-file sync step**.
 
 ## Installation
-
-Install FastSkill CLI:
 
 ```bash
 # Quick install (recommended)
 curl -fsSL https://raw.githubusercontent.com/gofastskill/fastskill/main/scripts/install.sh | bash
 
-# Or via Homebrew (Linux)
+# Or via Homebrew (macOS & Linux)
 brew install gofastskill/cli/fastskill
 
 # Or via Scoop (Windows)
-scoop bucket add gofastskill/scoop-bucket
+scoop bucket add gofastskill https://github.com/gofastskill/scoop-bucket
 scoop install fastskill
 
 # Or via Cargo
 cargo install fastskill
 ```
 
-Verify installation:
+Verify:
 
 ```bash
 fastskill --version
@@ -40,19 +38,30 @@ fastskill --version
 
 ## Configuration
 
-FastSkill uses `skill-project.toml` as a single configuration file for both project-level and skill-level contexts.
+FastSkill uses **`skill-project.toml`** as the single configuration file for both project-level and skill-level contexts. FastSkill walks up the directory tree from the current directory to find it.
 
-### Quick Setup
-
-Initialize a new project with:
+### Quick setup
 
 ```bash
 fastskill init
 ```
 
-This creates a `skill-project.toml` with all sections properly configured.
+This creates a `skill-project.toml` with the standard sections.
 
-### Configuration File Structure
+### Minimal configuration (enables reindex / search)
+
+Semantic search is the only feature that needs the embedding section. Everything else works without it.
+
+```toml
+# skill-project.toml  (minimum for reindex + search)
+[tool.fastskill.embedding]
+openai_base_url = "https://api.openai.com/v1"
+embedding_model = "text-embedding-3-small"
+```
+
+Required environment variable for embeddings: **`OPENAI_API_KEY`**. `skills_directory` is not required for `reindex`/`search` if skills are already installed under the default `.claude/skills/` path.
+
+### Configuration file structure
 
 ```toml
 [metadata]
@@ -76,508 +85,333 @@ url = "https://github.com/anthropics/skills"
 priority = 0
 ```
 
-### Environment Variables
+### Full schema reference
 
-```bash
-export OPENAI_API_KEY="your-key-here"
-export FASTSKILL_API_URL="https://registry.example.com"
+```
+skill-project.toml
+├── [metadata]              — skill identity (required when authoring/publishing a skill)
+│     id                   — string, unique skill ID (no slashes; scope is a separate concept)
+│     version              — semver string
+│     name                 — human-readable name
+│     description          — one-line description
+│     author               — optional
+│     compatibility        — optional, Claude version constraint
+│     download_url         — optional
+│     tags / capabilities  — optional string arrays
+├── [dependencies]          — skill dependencies (optional, may be empty table)
+├── [tool.fastskill]        — fastskill runtime config (optional section)
+│     skills_directory      — path where installed skills are stored (default: .claude/skills/)
+│     install_depth         — max transitive dependency depth (default: 5)
+│     skip_transitive       — skip transitive deps (default: false)
+│     auto_reindex          — reindex automatically after add/install/update/remove (default: true)
+├── [tool.fastskill.embedding]  — required only for reindex / search
+│     openai_base_url       — REQUIRED string, OpenAI-compatible API base URL
+│     embedding_model       — REQUIRED string, model name
+│     index_path            — optional path, default: .claude/.fastskill/index.db
+├── [tool.fastskill.eval]   — skill evaluation config (see references/eval.md)
+│     prompts / checks / timeout_seconds / fail_on_missing_agent
+├── [tool.fastskill.server] — serve CORS config: allowed_origins, allowed_headers
+└── [[tool.fastskill.repositories]]  — zero or more repository entries
+      name                  — REQUIRED string, unique repo label
+      type                  — REQUIRED enum: git-marketplace | http-registry | zip-url | local
+      url / index_url / base_url / path  — source-type-specific URL/path
+      branch                — optional, git branch (git-marketplace only)
+      priority              — optional integer, lower = higher priority (default 0)
+      auth                  — optional table: { type = "pat", env_var = "VAR" }
 ```
 
-## Basic Usage
+Configuration is stored **only** in `skill-project.toml`. FastSkill does not read a separate `.fastskill/config.yaml` file.
 
-### Skill Management
+### Environment variables
 
-#### Adding Skills
+```bash
+export OPENAI_API_KEY="your-key-here"        # embeddings / semantic search
+export FASTSKILL_API_URL="https://registry.example.com"   # default registry target
+```
 
-Install skills from various sources:
+Additional: `REGISTRY_INDEX_PATH` (override index path), `FASTSKILL_NO_PROGRESS` (disable progress bars), `FASTSKILL_AUTH_TOKEN` / `FASTSKILL_TOKEN` (registry auth token, checked by `doctor`). Repository PAT auth reads a per-repo `env_var` (default `PAT_TOKEN`).
+
+## Skill evaluations (evals)
+
+The CLI runs **skill evaluations**: prompts from a CSV, optional deterministic **checks** (TOML), agent execution via aikit-sdk, and timestamped artifact directories. Configuration lives in `[tool.fastskill.eval]` inside `skill-project.toml`.
+
+**You MUST** follow the dedicated guide for CSV and checks schema, CLI commands (`eval validate`, `eval run`, `eval report`, `eval score`), pass/fail rules, and packaging notes:
+
+- **[Skill evals guide](references/eval.md)** — setup, prompts CSV, `checks.toml`, agents, artifacts, CI.
+
+## Basic usage
+
+### Adding skills
 
 ```bash
 # From git repository
 fastskill add https://github.com/org/skill.git
 
-# From git repository subdirectory (GitHub tree URL: tree/<branch>/<path/to/skill>)
+# From a git repository subdirectory (GitHub tree URL: tree/<branch>/<path/to/skill>)
 fastskill add "https://github.com/org/repo/tree/main/path/to/skill"
 
-# From local folder
+# From a local folder
 fastskill add ./local-skill
 
-# Editable mode (for development)
+# Editable mode (symlink a local folder for development)
 fastskill add ./local-skill -e
 
-# From registry with version
-fastskill add pptx@1.0.0
+# Every skill under a local folder (recursive)
+fastskill add ./skills -r
+
+# From a registry with version
+fastskill add scope/pptx@1.0.0
 
 # From git with branch/tag
 fastskill add https://github.com/org/skill.git --branch main
 fastskill add https://github.com/org/skill.git --tag v1.0.0
 
-# Add to group
+# Add to a group
 fastskill add https://github.com/org/skill.git --group dev
 ```
 
-#### Installing from Manifest
+### Installing from the manifest
 
-Create `skill-project.toml` with dependencies:
+Declare dependencies in `skill-project.toml`:
 
 ```toml
 [dependencies]
 web-scraper = { source = "git", url = "https://github.com/org/web-scraper.git" }
-data-processor = { source = "git", url = "https://github.com/org/data-processor.git", group = "prod" }
+data-processor = { source = "git", url = "https://github.com/org/data-processor.git", groups = ["prod"] }
 ```
 
-Install all skills:
+Install:
 
 ```bash
-fastskill install
-
-# Install with lock file (reproducible)
-fastskill install --lock
-
-# Install specific groups
-fastskill install --only prod
-fastskill install --without dev
+fastskill install                 # apply the manifest, update skills.lock
+fastskill install --lock          # install exact versions from skills.lock (reproducible)
+fastskill install --only prod     # only the prod group
+fastskill install --without dev   # everything except the dev group
 ```
 
-#### Listing Skills
+### Listing, reading, and removing skills
 
 ```bash
-# List installed skills
-fastskill show
-
-# Remove skill
-fastskill remove my-skill-id
+fastskill list                    # list installed skills with reconciliation status
+fastskill list --json             # machine-readable
+fastskill read my-skill-id        # print the skill's SKILL.md
+fastskill read my-skill-id --meta # metadata only
+fastskill read my-skill-id --tree # dependency tree
+fastskill remove my-skill-id      # uninstall and update manifest + lock
 ```
 
-#### Updating Skills
+`fastskill <skill-id>` is shorthand for `fastskill read <skill-id>`.
+
+### Updating skills
 
 ```bash
-# Update all skills
-fastskill update
-
-# Update specific skill
-fastskill update my-skill-id
-
-# Check for updates without installing
-fastskill update --check
-
-# Dry run preview
-fastskill update --dry-run
+fastskill update                  # update all skills from their recorded source
+fastskill update my-skill-id      # update one skill
+fastskill update --check          # report what would change without writing
+fastskill update --dry-run        # preview
 ```
 
-### Semantic Search
-
-Index skills for semantic search:
+### Semantic search
 
 ```bash
-# Index all skills
-fastskill reindex
+fastskill reindex                 # build/refresh the local vector index
+fastskill reindex --force         # force a full re-index
 
-# Force re-index
-fastskill reindex --force
-
-# Control API concurrency
-fastskill reindex --max-concurrent 3
+fastskill search "powerpoint presentation"        # remote catalogs (default)
+fastskill search "data processing" --local        # installed skills
+fastskill search "charts" --local --limit 5 --format json
 ```
 
-Search indexed skills:
+Search needs an embedding provider (`[tool.fastskill.embedding]` + `OPENAI_API_KEY`) for semantic ranking; without it, local search falls back to keyword matching. Add/install/update/remove auto-reindex when `auto_reindex = true` (skipped silently if no embedding provider is configured); use `--no-reindex` to opt out.
+
+## Repository management
+
+FastSkill manages skill sources through the `repos` command group. Repositories are stored in `[[tool.fastskill.repositories]]` in `skill-project.toml`.
 
 ```bash
-fastskill search "powerpoint presentation"
-fastskill search "data processing" --limit 5
-fastskill search "charts" --format json
+# Add repositories (type: git-marketplace | http-registry | zip-url | local)
+fastskill repos add team-skills --repo-type git-marketplace https://github.com/org/team-skills.git
+fastskill repos add prod-registry --repo-type http-registry https://api.fastskill.io/index
+fastskill repos add official --repo-type zip-url https://example.com/skills/
+fastskill repos add local-dev --repo-type local ./local-skills
+
+# Inspect and maintain
+fastskill repos list                          # list configured repositories
+fastskill repos info team-skills              # repository details
+fastskill repos test team-skills              # connectivity check
+fastskill repos update team-skills --branch main --priority 1
+fastskill repos refresh                       # refresh cached catalog metadata
+fastskill repos remove team-skills
+
+# Browse catalogs
+fastskill repos skills --repository prod-registry [--scope engineering] [--all-versions]
+fastskill repos show engineering/data-analyzer --repository prod-registry
+fastskill repos versions engineering/data-analyzer --repository prod-registry
 ```
 
-## Repository Management
+Search across configured registries with `fastskill search "<query>" --repository <name>`.
 
-FastSkill provides a unified repository system for managing all skill storage locations.
+**git-marketplace requirements**: the repository must contain a `marketplace.json` at `.claude-plugin/marketplace.json` (Claude Code standard) or `marketplace.json` (root, legacy).
 
-### Git Marketplace Sources
-
-Git marketplace sources reference Git repositories containing skills with marketplace.json.
-
-**Configuration**:
-
-```toml
-[[tool.fastskill.repositories]]
-name = "team-skills"
-type = "git-marketplace"
-url = "https://github.com/org/team-skills.git"
-branch = "main"
-priority = 0
-```
-
-**Commands**:
-
-```bash
-# Add repository
-fastskill registry add team-skills --repo-type git-marketplace --url https://github.com/org/team-skills.git
-
-# List repositories
-fastskill registry list
-
-# Show repository details
-fastskill registry show team-skills
-
-# Search across repositories
-fastskill registry search "web scraping"
-
-# Refresh cached sources
-fastskill registry refresh
-
-# Remove repository
-fastskill registry remove team-skills
-```
-
-**Requirements**:
-- Repository must contain `marketplace.json` in one of these locations:
-  - `.claude-plugin/marketplace.json` (Claude Code standard)
-  - `marketplace.json` (root, legacy support)
-
-### HTTP Registry Sources
-
-HTTP-based registries provide skills through REST APIs.
-
-**Configuration**:
+**Authentication** uses env-var indirection — never store plaintext tokens:
 
 ```toml
 [[tool.fastskill.repositories]]
 name = "production-registry"
 type = "http-registry"
 index_url = "https://api.fastskill.io/index"
-priority = 0
 auth = { type = "pat", env_var = "FASTSKILL_TOKEN" }
 ```
 
-**Commands**:
+## Building marketplace catalogs
+
+Generate a `marketplace.json` from a folder of skills so others can consume them as a `git-marketplace` repository.
 
 ```bash
-# Add HTTP registry
-fastskill registry add prod-registry --repo-type http-registry --url https://api.fastskill.io/index
-
-# List skills from registry
-fastskill registry list-skills --repository prod-registry
-
-# List skills by scope
-fastskill registry list-skills --repository prod-registry --scope engineering
-
-# List skills with all versions
-fastskill registry list-skills --repository prod-registry --scope engineering --all-versions
-
-# Get skill details
-fastskill registry show-skill engineering/data-analyzer --repository prod-registry
-
-# List skill versions
-fastskill registry versions engineering/data-analyzer --repository prod-registry
-
-# Search skills in registry
-fastskill registry search "data analysis" --repository prod-registry
+fastskill marketplace create --path ./skills --name "My Marketplace"
+fastskill marketplace create -p . -o .claude-plugin/marketplace.json --name "My Marketplace" --base-url https://example.com/skills/
 ```
 
-### ZIP URL Sources
+| Option | Description |
+|--------|-------------|
+| `-p, --path <DIR>` | Root to scan for skills (default `.`) |
+| `-o, --output <FILE>` | Output path (default `.claude-plugin/marketplace.json`) |
+| `--name <NAME>` | **Required.** Marketplace name |
+| `--base-url <URL>` | Base URL for download links |
+| `--owner-name` / `--owner-email` / `--description` / `--version` | Optional metadata |
 
-Static hosting with pre-packaged ZIP archives.
+> **Distribution note:** the `fastskill` CLI does not include `publish`/`auth`/`package` commands. Skill distribution to a hosted registry is handled by the platform operator (a managed deploy workflow), not a self-hosted CLI publish path. Author locally, share via git/zip/marketplace catalogs, or hand artifacts to your registry operator.
 
-**Configuration**:
+## Analyzing a skill collection
 
-```toml
-[[tool.fastskill.repositories]]
-name = "official-skills"
-type = "zip-url"
-base_url = "https://example.com/skills/"
-priority = 0
-```
-
-**Commands**:
+`analyze` uses the semantic index to find overlap across skills (requires an embedding provider and an index — run `reindex` first).
 
 ```bash
-# Add ZIP URL repository
-fastskill registry add official-skills --repo-type zip-url --url https://example.com/skills/
+fastskill analyze matrix --threshold 0.8        # pairwise similarity
+fastskill analyze cluster -k 8 --min-size 2     # semantic clusters
+fastskill analyze duplicates --threshold 0.92 --severity high   # near-duplicates
 ```
 
-### Local Sources
+## Optimizing skills
 
-Local filesystem paths for development.
-
-**Configuration**:
-
-```toml
-[[tool.fastskill.repositories]]
-name = "local-dev"
-type = "local"
-path = "./local-skills"
-priority = 0
-```
-
-**Commands**:
+`optimize` runs an automated text-gradient loop that improves a skill document against eval cases: propose a patch → run the target agent → grade → accept if the score improves → repeat, writing the best version to disk.
 
 ```bash
-# Add local repository
-fastskill registry add local-dev --repo-type local --url ./local-skills
+fastskill optimize run --config optimize.toml --out-dir ./optimize-runs
+fastskill optimize status ./optimize-runs/<run> [--watch]
+fastskill optimize resume ./optimize-runs/<run>
+fastskill optimize inspect ./optimize-runs/<run> --step 3 --show all
+fastskill optimize export ./optimize-runs/<run> --out ./best_skill.md
 ```
 
-## Packaging Skills
+## Serving skills (HTTP API and MCP)
 
-Package skills into ZIP artifacts for distribution.
-
-### Package Command Options
-
-| Option | Description | Default |
-|---------|-------------|---------|
-| `--detect-changes` | Auto-detect changed skills using file hash comparison | `false` |
-| `--git-diff <BASE> <HEAD>` | Use git diff for change detection | None |
-| `--skills <IDS...>` | Package specific skills by ID | None |
-| `--bump <major\|minor\|patch>` | Bump version type | None |
-| `--auto-bump` | Auto-detect bump type from changes | `false` |
-| `--output <DIR>` | Output directory for artifacts | `./artifacts` |
-| `--force` | Package all skills regardless of changes | `false` |
-| `--dry-run` | Show what would be packaged without actually packaging | `false` |
-| `--skills-dir <DIR>` | Skills directory to scan | `./skills` |
-| `--recursive` | Recursively scan skills directory | `false` |
-
-### Usage Examples
-
-#### Auto-detect Changed Skills
+Start a local server exposing an HTTP API and web UI:
 
 ```bash
-fastskill package --detect-changes --output ./artifacts
+fastskill serve                                 # read-only by default
+fastskill serve --host 0.0.0.0 --port 8080
+fastskill serve --enable-write                  # enable state-changing endpoints
 ```
 
-#### Git-based Change Detection
+The server is **read-only by default** (ADR-0003): read endpoints (list/get skills, project, search, resolve, status, registry browse, dashboard) are always available; every write endpoint (install/update/remove/reindex/manifest edits) returns **HTTP 403** unless you start the server with `--enable-write`. `serve` enforces **no authentication of its own** — run it local-first, or place an authenticating reverse proxy in front if you expose it.
+
+All application routes are versioned under **`/api/v1/…`** (requests to `/api/…` redirect 308 to `/api/v1/…`).
+
+| Endpoint | Method | Access | Description |
+|----------|--------|--------|-------------|
+| `/api/v1/skills` | GET | read | List installed skills |
+| `/api/v1/skills/{id}` | GET | read | Get a skill |
+| `/api/v1/skills/{id}/content` | GET | read | Get `SKILL.md` content |
+| `/api/v1/project` | GET | read | Project manifest view |
+| `/api/v1/search` | POST | read | Search skills (`{"query":"…","limit":N}`) |
+| `/api/v1/resolve` | POST | read | Resolve the most relevant skills for a prompt |
+| `/api/v1/status` | GET | read | Service status + capability flags |
+| `/api/v1/registry/*` | GET | read | Browse registry sources / index / versions |
+| `/api/v1/skills/install` | POST | **write** | Install a skill from an origin |
+| `/api/v1/skills/update` | POST | **write** | Update one or all skills |
+| `/api/v1/skills/{id}` | DELETE | **write** | Remove a skill |
+| `/api/v1/reindex` | POST | **write** | Reindex |
+| `/api/v1/registry/refresh` | POST | **write** | Refresh registry sources |
+| `/api/v1/manifest/skills` | POST/PUT/DELETE | **write** | Manifest skill management |
+| `/healthz`, `/readyz` | GET | read | Liveness / readiness probes |
+
+### MCP server (expose FastSkill to your agent)
 
 ```bash
-fastskill package --git-diff HEAD~1 HEAD --output ./artifacts
+# Run an MCP server that exposes every CLI command as a tool `fastskill.<path>`
+fastskill mcp serve --transport stdio
+fastskill mcp serve --transport http --port 8080 --path /mcp
+
+# Write MCP server config into an agent's config
+fastskill mcp install --agent claude --scope project --stdio
+fastskill mcp list
 ```
 
-#### Version Bumping
+`mcp install` supports agents `claude`, `cursor`, `gemini`, `copilot`, `opencode`, and `codex`, at `--scope project` or `global`.
+
+## Diagnostics
 
 ```bash
-# Bump minor version
-fastskill package --detect-changes --bump minor --output ./artifacts
-
-# Bump patch version
-fastskill package --detect-changes --bump patch --output ./artifacts
+fastskill doctor          # check skills dir, skill-project.toml, embedding config, OPENAI_API_KEY, auth token
+fastskill doctor --json
 ```
 
-#### Package Specific Skills
+Add `-v` / `--verbose` to any command for more detail.
 
-```bash
-fastskill package --skills web-scraper data-processor --output ./artifacts
-```
+## CI/CD integration
 
-#### Force Package All Skills
-
-```bash
-fastskill package --force --output ./artifacts
-```
-
-#### Package All Skills Recursively
-
-```bash
-fastskill package --recursive --force --output ./artifacts
-```
-
-### Artifact Structure
-
-Each packaged skill creates a ZIP file:
-
-```
-skill-id-version.zip
-├── SKILL.md
-├── skill-project.toml
-├── scripts/
-├── references/
-├── assets/
-├── BUILD_INFO.json
-└── CHECKSUM.sha256
-```
-
-### Build Cache
-
-The command maintains a build cache at `.fastskill/build-cache.json` that tracks skill versions, file hashes, and artifact paths.
-
-## Publishing Skills
-
-Publish skill packages to registries.
-
-### Authentication
-
-```bash
-# Login to registry
-fastskill auth login
-
-# Check identity
-fastskill auth whoami
-
-# Or use token directly
-echo "your-jwt-token" | fastskill auth login --token-stdin
-```
-
-### Publish Command Options
-
-| Option | Description | Default |
-|---------|-------------|---------|
-| `--artifacts <PATH>` | Package file or directory | `./artifacts` |
-| `--target <TARGET>` | API URL or local folder path | `FASTSKILL_API_URL` |
-| `--wait` | Wait for validation | `true` |
-| `--no-wait` | Don't wait for validation | `false` |
-| `--max-wait <SECONDS>` | Maximum wait time (seconds) | `300` |
-
-### Usage Examples
-
-```bash
-# Publish to registry API
-fastskill publish --artifacts ./artifacts --target https://registry.example.com
-
-# Publish single package
-fastskill publish --artifacts ./artifacts/my-skill-1.0.0.zip --target https://registry.example.com
-
-# Publish to local folder
-fastskill publish --artifacts ./artifacts --target ./local-registry
-
-# Don't wait for validation
-fastskill publish --artifacts ./artifacts --target https://registry.example.com --no-wait
-```
-
-### Scope Management
-
-The server automatically extracts scope from your JWT token's user account:
-
-- **Organization users**: `"org/user"` → scope `"org"`
-- **Individual users**: `"user"` → scope `"user"`
-
-Example skill IDs:
-
-- `acme/web-scraper` (scope: acme)
-- `personal/tool` (scope: personal)
-
-## Server and HTTP API
-
-Start FastSkill HTTP server:
-
-```bash
-# Start API server
-fastskill serve
-
-# Start with web UI
-fastskill serve --enable-registry
-
-# Custom host and port
-fastskill serve --host 0.0.0.0 --port 8080 --enable-registry
-```
-
-### API Endpoints
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/registry/skills/search?query=<term>` | GET | Search skills by query |
-| `/api/registry/index/skills` | GET | List all skills from registry index |
-| `/api/registry/skills/:skill_id` | GET | Get skill metadata |
-| `/api/registry/skills/:skill_id/versions` | GET | List versions for a skill |
-| `/api/registry/skills/:skill_id/:version/download` | GET | Download skill package (302 redirect) |
-| `DELETE /api/registry/skills/:skill_id/:version/yank` | DELETE | Yank a version |
-| `PUT /api/registry/skills/:skill_id/:version/unyank` | PUT | Unyank a version |
-
-## CI/CD Integration
-
-### GitHub Actions Example
+### GitHub Actions
 
 ```yaml
-name: Publish Skills
+name: Skills CI
 
 on:
   push:
     branches: [main]
-    paths:
-      - 'skills/**'
+    paths: ['skills/**', 'skill-project.toml', 'skills.lock']
 
 jobs:
-  publish:
+  verify:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Install FastSkill
-        run: |
-          curl -fsSL https://raw.githubusercontent.com/gofastskill/fastskill/main/scripts/install.sh | bash
-      
-      - name: Package changed skills
-        run: |
-          fastskill package --git-diff HEAD~1 HEAD --auto-bump --output ./artifacts
-      
-      - name: Publish to registry
-        env:
-          FASTSKILL_API_URL: ${{ secrets.FASTSKILL_API_URL }}
-          FASTSKILL_API_TOKEN: ${{ secrets.FASTSKILL_API_TOKEN }}
-        run: |
-          fastskill publish --artifacts ./artifacts
+        run: curl -fsSL https://raw.githubusercontent.com/gofastskill/fastskill/main/scripts/install.sh | bash
+
+      - name: Reproducible install
+        run: fastskill install --lock
+
+      - name: Validate evals
+        run: fastskill eval validate
 ```
 
-### GitLab CI Example
-
-```yaml
-stages:
-  - package
-  - publish
-
-package:
-  stage: package
-  script:
-    - fastskill package --git-diff $CI_COMMIT_BEFORE_SHA $CI_COMMIT_SHA --auto-bump --output ./artifacts
-  artifacts:
-    paths:
-      - artifacts/
-
-publish:
-  stage: publish
-  script:
-    - echo "$FASTSKILL_API_TOKEN" | fastskill auth login --token-stdin
-    - fastskill publish --artifacts ./artifacts
-```
+Set `OPENAI_API_KEY` and any repository PAT env vars as CI secrets when your workflow uses search or private repositories.
 
 ## Troubleshooting
 
-### Configuration Not Found
+### "Embedding configuration required but not found"
 
-If you see "Embedding configuration required but not found":
+1. Run `fastskill init` (or add `[tool.fastskill.embedding]` to `skill-project.toml`).
+2. Set `OPENAI_API_KEY`.
+3. Re-run `fastskill reindex`.
 
-1. Run `fastskill init` to create `skill-project.toml`
-2. Add `[tool.fastskill.embedding]` section with embedding configuration
-3. Set `OPENAI_API_KEY` environment variable
+### Repository source not appearing
 
-### Source Not Appearing in Registry
+- Verify `marketplace.json` exists at the expected location for `git-marketplace`.
+- Confirm the repo `type` and URL are correct; run `fastskill repos test <name>`.
 
-- Verify `marketplace.json` exists at expected URL
-- Check source type is `git-marketplace` or `zip-url`
-- Ensure URL is accessible
+### Search returns nothing
 
-### Publish Failures
+- Run `fastskill reindex` to (re)build the index.
+- Confirm `OPENAI_API_KEY` and `[tool.fastskill.embedding]` are set (`fastskill doctor`).
 
-- Verify authentication credentials
-- Check registry API URL
-- Ensure registry server is running
+## Version management
 
-### Search Not Working
+FastSkill uses semantic versioning. A skill's version is read from the `[metadata]` section of its `skill-project.toml`.
 
-- Run `fastskill reindex` to rebuild index
-- Verify OpenAI API key is set
-- Check embedding configuration
+## Additional resources
 
-## Version Management
-
-FastSkill uses semantic versioning (semver):
-
-- **Major**: Breaking changes (1.2.3 → 2.0.0)
-- **Minor**: New features (1.2.3 → 1.3.0)
-- **Patch**: Bug fixes (1.2.3 → 1.2.4)
-
-Version is read from `skill-project.toml` [metadata] section.
-
-## Additional Resources
-
-See [Reference Guide](references/SKILL-REFERENCE.md) for:
-- Complete command reference with all options
-- Advanced usage patterns
-- Repository management details
-- Authentication and scope handling
-- API server configuration
-- CI/CD workflow templates
+- **[Skill evals (`fastskill eval`)](references/eval.md)** — eval config, prompts CSV, checks TOML, running/scoring, artifacts.
+- Full documentation: <https://docs.gofastskill.com/>
