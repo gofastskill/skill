@@ -2,13 +2,18 @@
 id = "fastskill"
 version = "1.1.0"
 name = "fastskill"
-description = "Package manager and operational toolkit for AI Agent skills. This skill should be used when installing, managing, packaging, publishing, or discovering skills; setting up skill registries; configuring repositories; implementing CI/CD workflows for skills; performing semantic search across skill collections."
+description = "Package manager and operational toolkit for AI Agent skills. This skill should be used when installing, managing, discovering, or analyzing skills; configuring repositories; performing semantic search; running skill evaluations or the optimization loop; serving skills over HTTP/MCP; or building marketplace catalogs."
 author = "Alexandre Oliveira"
 compatibility = ">=4.20250101"
-tags = ["tools", "package-manager", "skill-management", "registry", "ci-cd", "fastskill-cli", "versioning"]
-capabilities = ["skill-installation", "skill-packaging", "skill-publishing", "semantic-search", "registry-management", "version-management", "cli-commands"]
+tags = ["tools", "package-manager", "skill-management", "registry", "semantic-search", "fastskill-cli", "versioning"]
+capabilities = ["skill-installation", "skill-discovery", "semantic-search", "registry-management", "skill-evaluation", "skill-optimization", "version-management", "mcp-serving", "cli-commands"]
 
 [dependencies]
 
 [tool.fastskill]
 skills_directory = "fastskill"
+
+[tool.fastskill.eval]
+prompts = "../evals/prompts.csv"
+timeout_seconds = 120
+fail_on_missing_agent = true
