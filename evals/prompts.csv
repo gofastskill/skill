@@ -1,0 +1,2 @@
+id,prompt,should_trigger,tags,workspace_subdir
+smoke-1,"List fastskill subcommands briefly",true,smoke,
