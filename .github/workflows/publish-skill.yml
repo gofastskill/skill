@@ -4,13 +4,10 @@ on:
   push:
     branches: [main]
     paths:
-      - 'skill/**'
+      - 'fastskill/**'
       - '.github/workflows/publish-skill.yml'
   workflow_dispatch:
     inputs:
-      version:
-        description: 'Version to release (e.g., 1.2.3)'
-        required: false
       force:
         description: 'Force package even if no changes detected'
         type: boolean
@@ -19,58 +16,62 @@ on:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 2
           token: ${{ secrets.GITHUB_TOKEN }}
-      
-      - name: Install FastSkill CLI
-        run: |
-          curl -fsSL https://raw.githubusercontent.com/gofastskill/fastskill/main/scripts/install.sh | bash
-          fastskill --version
-      
+
       - name: Detect changes
         id: detect
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            FORCE="${{ inputs.force || 'false' }}"
             echo "changed=true" >> $GITHUB_OUTPUT
-            echo "force=$FORCE" >> $GITHUB_OUTPUT
           else
-            CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD | grep '^skills/' || echo "")
+            CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD | grep '^fastskill/' || echo "")
             if [ -n "$CHANGED_FILES" ]; then
               echo "changed=true" >> $GITHUB_OUTPUT
-              echo "force=true" >> $GITHUB_OUTPUT
             else
               echo "changed=false" >> $GITHUB_OUTPUT
-              echo "force=false" >> $GITHUB_OUTPUT
             fi
           fi
-      
+
       - name: Get version
         id: version
         run: |
           VERSION=$(grep '^version = ' fastskill/skill-project.toml | sed 's/version = "\([^"]*\)"/\1/')
+          if [ -z "$VERSION" ]; then
+            echo "::error::Could not read version from fastskill/skill-project.toml"
+            exit 1
+          fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-      
-      - name: Package skill using FastSkill
-        if: steps.detect.outputs.changed == 'true' || steps.detect.outputs.force == 'true'
+
+      - name: Package skill
+        if: steps.detect.outputs.changed == 'true'
         run: |
-          # Package fastskill skill using fastskill CLI
-          # Skills are in repository root
-          fastskill package \
-            --skills-dir . \
-            --skills fastskill \
-            --force \
-            --output ./artifacts
-      
+          # The fastskill CLI has no `package` command (distribution is platform-side),
+          # so build the skill ZIP directly: the skill directory's contents at the
+          # archive root (SKILL.md, skill-project.toml, references/).
+          mkdir -p artifacts
+          ZIP="artifacts/fastskill-${{ steps.version.outputs.version }}.zip"
+          (cd fastskill && zip -r "../${ZIP}" . -x "results/*" -x "*.gitkeep")
+          (cd artifacts && sha256sum "$(basename "$ZIP")" > "$(basename "$ZIP").sha256")
+          unzip -l "$ZIP"
+
+      - name: Generate GitHub App Token
+        id: app-token
+        if: steps.detect.outputs.changed == 'true'
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.GH_APP_ID }}
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
       - name: Delete old releases
-        if: steps.detect.outputs.changed == 'true' || steps.detect.outputs.force == 'true'
+        if: steps.detect.outputs.changed == 'true'
         run: |
-          # Delete any releases with incorrect or old tags
           for tag in $(gh release list --json tagName --jq '.[].tagName'); do
             if [ "$tag" = "v" ] || [ "$tag" != "v${{ steps.version.outputs.version }}" ]; then
               echo "Deleting release $tag"
@@ -79,46 +80,38 @@ jobs:
           done
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
-      
-      - name: Generate GitHub App Token
-        id: app-token
-        if: steps.detect.outputs.changed == 'true' || steps.detect.outputs.force == 'true'
-        uses: actions/create-github-app-token@v1
-        with:
-          app-id: ${{ secrets.GH_APP_ID }}
-          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-      
+
       - name: Create GitHub Release
-        if: steps.detect.outputs.changed == 'true' || steps.detect.outputs.force == 'true'
+        if: steps.detect.outputs.changed == 'true'
         uses: softprops/action-gh-release@v1
         with:
           tag_name: v${{ steps.version.outputs.version }}
           name: FastSkill v${{ steps.version.outputs.version }}
           body: |
             FastSkill - Package manager and operational toolkit for Claude Code-compatible skills
-            
+
             ## What's New
-            
-            See [changelog](https://github.com/${{ github.repository }}/blob/main/skill/SKILL.md) for details.
-            
+
+            See [SKILL.md](https://github.com/${{ github.repository }}/blob/main/fastskill/SKILL.md) for details.
+
             ## Installation
-            
+
             Add this skill to your project:
-            
+
             ```bash
             # Install this skill
             fastskill add https://github.com/${{ github.repository }}.git
             ```
-            
+
             ## Contents
-            
+
             - SKILL.md: Comprehensive skill documentation
             - skill-project.toml: Skill configuration and metadata
-          files: ./artifacts/*.zip
-          fail_on_unmatched_files: false
+            - references/: Reference guides (eval.md)
+          files: ./artifacts/*
+          fail_on_unmatched_files: true
           draft: false
           prerelease: false
           generate_release_notes: false
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
