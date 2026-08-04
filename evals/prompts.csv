@@ -7,7 +7,7 @@ list-status,"Show which skills are installed and whether they match the lockfile
 repos-add,"Add a git-marketplace repository as a skill source",true,repos,
 reproducible-ci,"Set up reproducible skill installs in CI",true,ci,
 eval-skill,"How do I run quality evaluations on a skill before shipping it?",true,eval,
-optimize-skill,"Automatically improve a skill so it triggers more reliably",true,optimize,
+optimize-skill,"Explain, without running anything, how to use fastskill to automatically improve a skill so it triggers more reliably",true,optimize,
 analyze-dupes,"Find near-duplicate skills across my collection",true,analyze,
 serve-local,"Run a local HTTP API and web UI for my installed skills",true,serve,
 mcp-integrate,"Expose fastskill to Claude Code and Cursor as MCP tools",true,mcp,
