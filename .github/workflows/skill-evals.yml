@@ -14,6 +14,7 @@ on:
       - 'fastskill/references/eval.md'
       - 'evals/**'
       - '.github/workflows/skill-evals.yml'
+  merge_group:
   workflow_dispatch:
     inputs:
       agent:
