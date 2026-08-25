@@ -181,9 +181,19 @@ Declare dependencies in `skill-project.toml`:
 
 ```toml
 [dependencies]
-web-scraper = { source = "git", url = "https://github.com/org/web-scraper.git" }
-data-processor = { source = "git", url = "https://github.com/org/data-processor.git", groups = ["prod"] }
+web-scraper = { origin = { type = "git", url = "https://github.com/org/web-scraper.git" } }
+data-processor = { origin = { type = "git", url = "https://github.com/org/data-processor.git" }, groups = ["prod"] }
 ```
+
+Pin a branch, tag, or commit with `ref`:
+
+```toml
+web-scraper = { origin = { type = "git", url = "https://github.com/org/web-scraper.git", ref = { branch = "main" } } }
+```
+
+> The older `{ source = "git", url = ... }` shape (no `origin` wrapper) still reads and is
+> silently upgraded in memory, but it's slated for removal — write new manifests with
+> `origin`.
 
 Install:
 
