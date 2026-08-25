@@ -12,8 +12,13 @@ pattern = "fastskill"
 expected = true
 required = true
 
-# Guard against runaway agent loops: bound the number of raw trace events.
+# Guard against runaway agent loops: bound the number of tool calls the agent makes.
+#
+# The limit is deliberately loose. It exists to catch a pathological loop, not to
+# assert an efficient solution — the cases below are exploratory ("list the CLI
+# commands"), so a tight bound would fail on a reasonable agent that reads one
+# extra file. Tighten it only against observed live-run counts.
 [[check]]
-name = "max_command_count"
+name = "max_tool_calls"
 limit = 100
 required = true
