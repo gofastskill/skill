@@ -4,14 +4,22 @@ This guide matches the FastSkill CLI implementation: configuration is read from 
 
 ## What evals are for
 
-Evals run repeatable prompts against a real agent in a working directory derived from your skill project root. You can record stdout, stderr, a JSONL trace, and per-case results under a timestamped run directory. Optional **checks** assert properties of that output (substring expectations, file presence, command count).
+Evals run repeatable prompts against a real agent in a working directory derived from your skill project root. You can record stdout, stderr, a JSONL trace, and per-case results under a timestamped run directory. Optional **checks** assert properties of that output (substring expectations, file presence, tool-call count).
 
 ## Prerequisites
 
 1. **FastSkill CLI** installed (`fastskill --version`).
 2. A **`skill-project.toml`** reachable from the current directory (FastSkill walks up the tree to find it).
 3. **`[tool.fastskill.eval]`** present with a valid `prompts` path (see below).
-4. For **`fastskill eval run`**: a **runnable agent** installed and on `PATH`. Supported agent keys come from aikit-sdk: `codex`, `claude`, `gemini`, `opencode`, `agent`. If `fail_on_missing_agent = true` (default), the CLI refuses to run when the chosen agent is missing.
+4. For **`fastskill eval run`**: a **runnable agent** installed and on `PATH`. Agent keys are a closed set defined by aikit-sdk: `claude`, `codex`, `cursor`, `gemini`, `opencode`, `pi`, `aikit` — the last runs in-process and needs no CLI. If `fail_on_missing_agent = true` (default), the CLI refuses to run when the chosen agent is missing.
+
+   `--agent` is validated against the agents **detected on the current machine**, not against the full key list. An agent is "detected" when its CLI is on `PATH` and answers `--version`. So a supported-but-not-installed key fails exactly like a typo:
+
+   ```
+   RUNTIME_UNKNOWN_ID: Unknown runtime ID(s): opencode. Available: aikit, claude, codex, cursor, gemini, pi
+   ```
+
+   If you get this for a key spelled correctly, install that agent's CLI — the `Available:` list reports what was found locally, so it differs from machine to machine and from the list above.
 
 Evals do **not** require embedding or `OPENAI_API_KEY` unless your workflow also uses `reindex` / `search`.
 
@@ -108,16 +116,22 @@ path = "report.txt"
 required = true
 ```
 
-### `max_command_count`
+### `max_tool_calls`
 
-Counts trace events whose payload is typed **`raw_json`** (parsed JSON lines in `trace.jsonl`). Passes if count ≤ `limit`.
+Counts **tool calls** in `trace.jsonl` — trace events whose payload is typed `tool_use` (a structured tool invocation the agent made) or `raw_json` (a line the agent's backend emitted that FastSkill's aikit version does not yet model). Passes if count ≤ `limit`.
+
+Agent prose is **not** a tool call: `message` and `reasoning` events are never counted.
 
 ```toml
 [[check]]
-name = "max_command_count"
+name = "max_tool_calls"
 limit = 20
 required = true
 ```
+
+> **Renamed.** This check was `max_command_count`. The old name still parses, so existing `checks.toml` files keep working, but results report the check as `max_tool_calls`. Use the new name in new files.
+>
+> **Re-baseline your limits if you set them before FastSkill 0.9.192.** Earlier versions counted only `raw_json`, which for some agents (notably `codex`) meant *every* trace line — including plain text — while structured tool calls counted as zero. The same agent behaviour can therefore produce a very different number now, usually a much smaller one. A limit tuned against the old count is not measuring what you think it is.
 
 Parse/load errors: `EVAL_CHECKS_INVALID`.
 

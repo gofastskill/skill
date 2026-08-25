@@ -114,10 +114,15 @@ skill-project.toml
 └── [[tool.fastskill.repositories]]  — zero or more repository entries
       name                  — REQUIRED string, unique repo label
       type                  — REQUIRED enum: git-marketplace | http-registry | zip-url | local
-      url / index_url / base_url / path  — source-type-specific URL/path
+      REQUIRED source-type-specific location — exactly one, matching `type`:
+        git-marketplace → url        http-registry → index_url
+        zip-url         → zip_url    local         → path
       branch                — optional, git branch (git-marketplace only)
-      priority              — optional integer, lower = higher priority (default 0)
+      priority              — REQUIRED integer, lower = higher priority
       auth                  — optional table: { type = "pat", env_var = "VAR" }
+                              **http-registry only** — other source types
+                              authenticate differently and ignore or reject it.
+                              See "Authentication" below.
 ```
 
 Configuration is stored **only** in `skill-project.toml`. FastSkill does not read a separate `.fastskill/config.yaml` file.
@@ -262,6 +267,19 @@ type = "http-registry"
 index_url = "https://api.fastskill.io/index"
 auth = { type = "pat", env_var = "FASTSKILL_TOKEN" }
 ```
+
+The `auth` block applies to **`http-registry` sources only**. Every other source type
+authenticates by a different mechanism, and `auth` is not consulted for them:
+
+| Source type | How to authenticate |
+|---|---|
+| `http-registry` | `auth = { type = "pat", env_var = "..." }` (above). |
+| `git-marketplace` | The system git credential helper (`gh auth login`, `git config credential.helper`) or an SSH remote plus a key in your SSH agent. FastSkill shells out to `git` and never injects PATs — setting `auth` here is rejected with an error. |
+| `zip-url` | A **pre-signed URL** (S3/GCS), which carries the credential in the URL itself. A zip-url fetch is a plain HTTP GET that sends no auth headers. |
+| `local` | Filesystem permissions. |
+
+> Do not rely on `auth` to protect a private `zip-url` artifact — it is not applied to
+> the request. Use a pre-signed URL instead.
 
 ## Building marketplace catalogs
 
