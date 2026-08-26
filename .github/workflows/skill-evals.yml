@@ -8,12 +8,12 @@ on:
       - 'fastskill/references/eval.md'
       - 'evals/**'
       - '.github/workflows/skill-evals.yml'
+  # No `paths:` filter here on purpose. `validate` and `score-fixtures` are
+  # required status checks, and a required check that is skipped by a path
+  # filter never reports at all — which blocks the pull request forever rather
+  # than passing it. Both jobs are deterministic and make no LLM calls, so
+  # running them on every pull request is cheap.
   pull_request:
-    paths:
-      - 'fastskill/skill-project.toml'
-      - 'fastskill/references/eval.md'
-      - 'evals/**'
-      - '.github/workflows/skill-evals.yml'
   merge_group:
   workflow_dispatch:
     inputs:
