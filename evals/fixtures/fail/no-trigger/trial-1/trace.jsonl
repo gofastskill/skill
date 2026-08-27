@@ -1,0 +1,4 @@
+{"seq":0,"payload":{"type":"message","text":"4","role":"assistant"}}
+{"seq":1,"payload":{"type":"message","text":"4","role":"assistant"}}
+{"seq":2,"payload":{"type":"token_usage_line","usage":{"cache_creation_tokens":5140,"cache_read_tokens":15581,"input_tokens":2,"output_tokens":3,"reasoning_tokens":null,"total_tokens":null},"source":"claude","raw_agent_line_seq":1}}
+{"seq":3,"payload":{"type":"unknown","payload_type":"result","raw":"Result { text: \"4\", structured: None, session_id: None }"}}

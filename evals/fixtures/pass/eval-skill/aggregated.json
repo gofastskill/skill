@@ -1,0 +1,31 @@
+{
+  "id": "eval-skill",
+  "trials": [
+    {
+      "trial_id": 1,
+      "status": "passed",
+      "command_count": 2,
+      "input_tokens": 6,
+      "output_tokens": 1778,
+      "check_results": [
+        {
+          "check_name": "skill_invoked",
+          "passed": true,
+          "required": true,
+          "message": null
+        },
+        {
+          "check_name": "max_tool_calls",
+          "passed": true,
+          "required": true,
+          "message": null
+        }
+      ],
+      "error_message": null
+    }
+  ],
+  "aggregated_status": "passed",
+  "pass_count": 1,
+  "total_trials": 1,
+  "pass_rate": 1.0
+}

@@ -1,0 +1,22 @@
+{
+  "trial_id": 1,
+  "status": "failed",
+  "command_count": 0,
+  "input_tokens": 2,
+  "output_tokens": 3,
+  "check_results": [
+    {
+      "check_name": "skill_invoked",
+      "passed": false,
+      "required": true,
+      "message": "Skill invocation 'fastskill' not found"
+    },
+    {
+      "check_name": "max_tool_calls",
+      "passed": true,
+      "required": true,
+      "message": null
+    }
+  ],
+  "error_message": null
+}
