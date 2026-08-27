@@ -20,8 +20,13 @@ on:
       agent:
         description: 'Agent CLI to run live evals with'
         type: choice
-        options: [codex, claude]
-        default: codex
+        # claude is the default because checks.toml's required `skill_invoked`
+        # check needs structured Skill tool-use events in the trace, which the
+        # codex backend never emits (codex has no Skill tool concept). A codex
+        # live run will always fail the suite; the option remains only for
+        # diagnostic runs of the non-trigger checks.
+        options: [claude, codex]
+        default: claude
 
 concurrency:
   group: skill-evals-${{ github.ref }}

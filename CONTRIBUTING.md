@@ -44,8 +44,8 @@ fastskill eval validate --json
 which is how CI exercises the checks engine without spending tokens:
 
 ```bash
-fastskill eval score --run-dir evals/fixtures/pass   # must succeed
-fastskill eval score --run-dir evals/fixtures/fail   # must fail (missing trigger)
+fastskill eval score --run-dir evals/fixtures/pass   # must succeed (claude invoked the skill)
+fastskill eval score --run-dir evals/fixtures/fail   # must fail (skill never invoked)
 ```
 
 ### Run live (requires an agent CLI + API key)

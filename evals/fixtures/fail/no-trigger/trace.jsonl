@@ -1,2 +1,0 @@
-{"seq":0,"payload":{"type":"raw_json","data":{"type":"turn.started"}}}
-{"seq":1,"payload":{"type":"raw_json","data":{"type":"turn.completed"}}}

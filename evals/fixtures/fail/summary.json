@@ -1,14 +1,79 @@
 {
-  "suite_pass": true,
-  "agent": "codex",
+  "suite_pass": false,
+  "suite_pass_rate": 0.0,
+  "agent": "claude",
   "model": null,
   "total_cases": 1,
-  "passed": 1,
-  "failed": 0,
-  "run_dir": "evals/fixtures/fail",
-  "checks_path": "evals/checks.toml",
-  "skill_project_root": ".",
+  "passed": 0,
+  "failed": 1,
+  "trials_per_case": 1,
+  "parallel": null,
+  "pass_threshold": 1.0,
+  "run_dir": "../rec-fail/2026-08-27T14-23-11Z/claude",
+  "checks_path": "/tmp/claude-1000/-home-sysuser-ws001/1a05d7d1-f68a-4ac0-ba55-b18308ae333b/scratchpad/failrec/fastskill/../evals/checks.toml",
+  "skill_project_root": "/tmp/claude-1000/-home-sysuser-ws001/1a05d7d1-f68a-4ac0-ba55-b18308ae333b/scratchpad/failrec/fastskill",
+  "isolation": {
+    "requested": true,
+    "project_scope": "isolated",
+    "user_scope": "isolated",
+    "mechanism": "--setting-sources project",
+    "agent_version": null,
+    "ambient_skills": [
+      "fastskill",
+      "deep-research",
+      "design-sync",
+      "dataviz",
+      "update-config",
+      "verify",
+      "debug",
+      "code-review",
+      "simplify",
+      "batch",
+      "fewer-permission-prompts",
+      "doctor",
+      "loop",
+      "schedule",
+      "claude-api",
+      "run",
+      "run-skill-generator"
+    ],
+    "workspace_root": "../rec-fail/2026-08-27T14-23-11Z/claude/workspaces/workspace-no-trigger",
+    "degrade_reason": null
+  },
   "cases": [
-    { "id": "no-trigger", "status": "passed", "command_count": 2, "input_tokens": null, "output_tokens": null }
+    {
+      "id": "no-trigger",
+      "status": "failed",
+      "command_count": 0,
+      "input_tokens": 2,
+      "output_tokens": 3,
+      "pass_count": 0,
+      "total_trials": 1,
+      "pass_rate": 0.0,
+      "trials": [
+        {
+          "trial_id": 1,
+          "status": "failed",
+          "command_count": null,
+          "input_tokens": null,
+          "output_tokens": null,
+          "check_results": [
+            {
+              "check_name": "skill_invoked",
+              "passed": false,
+              "required": true,
+              "message": "Skill invocation 'fastskill' not found"
+            },
+            {
+              "check_name": "max_tool_calls",
+              "passed": true,
+              "required": true,
+              "message": null
+            }
+          ],
+          "error_message": null
+        }
+      ]
+    }
   ]
 }

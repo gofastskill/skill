@@ -5,10 +5,18 @@
 # NOTE: checks are GLOBAL — the same set is applied to every case in the suite,
 # so they assert properties that must hold for all (positive) cases.
 
-# The skill's guidance must reference the fastskill CLI.
+# The skill must actually be invoked — asserted structurally on the trace's
+# `Skill` tool-use event, not by pattern-matching text. A substring pattern
+# (the old `trigger_expectation` check) can false-pass when the agent merely
+# *mentions* the skill; `skill_invoked` only passes when a `Skill` tool call
+# with an identifying field equal to "fastskill" is present.
+#
+# NOTE: this requires an agent whose backend emits structured Skill tool-use
+# events (claude). codex has no Skill tool concept, so its traces can never
+# satisfy this check — run live evals with --agent claude.
 [[check]]
-name = "trigger_expectation"
-pattern = "fastskill"
+name = "skill_invoked"
+skill = "fastskill"
 expected = true
 required = true
 
