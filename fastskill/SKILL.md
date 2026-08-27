@@ -138,7 +138,7 @@ Additional: `REGISTRY_INDEX_PATH` (override index path), `FASTSKILL_NO_PROGRESS`
 
 ## Skill evaluations (evals)
 
-The CLI runs **skill evaluations**: prompts from a CSV, optional deterministic **checks** (TOML), agent execution via aikit-sdk, and timestamped artifact directories. Configuration lives in `[tool.fastskill.eval]` inside `skill-project.toml`.
+The CLI runs **skill evaluations**: prompts from a CSV, optional deterministic **checks** (TOML), agent execution via aikit-sdk, and timestamped artifact directories. Configuration lives in `[tool.fastskill.eval]` inside `skill-project.toml`. Cases run **isolated by default** — a per-case scratch workspace containing only the skill under test (needs `SKILL.md` + `[metadata].id`; opt out with `--no-isolation`) — so trigger rates measure the skill, not the machine.
 
 **You MUST** follow the dedicated guide for CSV and checks schema, CLI commands (`eval validate`, `eval run`, `eval report`, `eval score`), pass/fail rules, and packaging notes:
 
@@ -331,6 +331,8 @@ fastskill optimize resume ./optimize-runs/<run>
 fastskill optimize inspect ./optimize-runs/<run> --step 3 --show all
 fastskill optimize export ./optimize-runs/<run> --out ./best_skill.md
 ```
+
+Scoring passes (rollouts, gate, baseline, final) are **isolated by default**: each case scores in a scratch workspace containing only the candidate skill. Set `isolate = false` in the config or pass `optimize run --no-isolation` to score against the machine's ambient environment instead; the decision is persisted into the run's provenance config so `resume` replays it. Baselines recorded before isolation existed will shift on the first isolated run.
 
 ## Serving skills (HTTP API and MCP)
 
