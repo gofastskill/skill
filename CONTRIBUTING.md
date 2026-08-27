@@ -21,8 +21,9 @@ from the `fastskill/` directory so path resolution finds that manifest and `../e
 ## Development
 
 1. Edit files in the `fastskill/` subdirectory (and `evals/` when extending the suite)
-2. Commit and push to `main` branch
-3. The CI/CD workflow will automatically package and publish a new release
+2. Open a pull request from a branch off the latest `origin/main` (see `CLAUDE.md`) —
+   changes land via PR with required status checks, not by pushing to `main` directly
+3. On merge, the CI/CD workflow automatically packages and publishes a new release
 
 ## Evaluations
 
