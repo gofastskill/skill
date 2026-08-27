@@ -9,9 +9,9 @@
   "trials_per_case": 1,
   "parallel": null,
   "pass_threshold": 1.0,
-  "run_dir": "/tmp/claude-1000/-home-sysuser-ws001/1a05d7d1-f68a-4ac0-ba55-b18308ae333b/scratchpad/rec-pass/2026-08-27T14-21-47Z/claude",
-  "checks_path": "/home/sysuser/ws001/gofastskill/skill/.worktrees/skill-invoked/fastskill/../evals/checks.toml",
-  "skill_project_root": "/home/sysuser/ws001/gofastskill/skill/.worktrees/skill-invoked/fastskill",
+  "run_dir": "evals/fixtures/pass",
+  "checks_path": "evals/checks.toml",
+  "skill_project_root": ".",
   "isolation": {
     "requested": true,
     "project_scope": "isolated",
