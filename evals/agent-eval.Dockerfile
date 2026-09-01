@@ -4,8 +4,8 @@
 #   docker run --rm -e OPENAI_API_KEY=$OPENAI_API_KEY     fastskill-evals codex
 #   docker run --rm -e ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY fastskill-evals claude
 #
-# Runnable agents at the shipped CLI's pinned aikit rev: codex, claude, gemini, opencode.
-# `pi` and `cursor` are newer aikit additions NOT yet vendored by fastskill — do not pass them.
+# Agent keys the CLI knows: aikit, claude, codex, cursor, gemini, pi. This image installs only
+# codex and claude; extend the `npm install -g` line below before passing another key.
 FROM node:20-slim
 
 RUN apt-get update \

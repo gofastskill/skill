@@ -1,4 +1,5 @@
-# Deterministic scoring applied to every eval case's captured stdout + trace.
+# Deterministic scoring applied to every eval case's captured trace (trace.jsonl).
+# stdout.txt is recorded alongside it but is not an input to any check.
 # Consumed by `fastskill eval run` (live) and `fastskill eval score` (offline).
 # Schema + check types: fastskill/references/eval.md
 #

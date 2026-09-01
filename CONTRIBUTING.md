@@ -44,19 +44,21 @@ fastskill eval validate --json
 which is how CI exercises the checks engine without spending tokens:
 
 ```bash
+# run from the repository root: the recorded summary.json points at evals/checks.toml
+# relative to the current directory, which is also how CI invokes it
 fastskill eval score --run-dir evals/fixtures/pass   # must succeed (claude invoked the skill)
 fastskill eval score --run-dir evals/fixtures/fail   # must fail (skill never invoked)
 ```
 
 ### Run live (requires an agent CLI + API key)
 
-Runnable agents at the CLI's pinned aikit rev: `codex`, `claude`, `gemini`, `opencode`.
-(`pi` and `cursor` are newer aikit agents not yet vendored by fastskill.)
+Agent keys the CLI knows: `aikit`, `claude`, `codex`, `cursor`, `gemini`, `pi`
+(`fastskill eval validate --all` lists which of them are installed on your machine).
 
 ```bash
 cd fastskill
 fastskill eval run --agent codex --output-dir ../eval-runs
-fastskill eval report --run-dir ../eval-runs/<timestamp>
+fastskill eval report --run-dir ../eval-runs/<timestamp>/codex   # the per-agent directory
 ```
 
 Or reproducibly in Docker:

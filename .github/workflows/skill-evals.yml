@@ -75,7 +75,7 @@ jobs:
   # ----------------------------------------------------------------------------
   # Opt-in (workflow_dispatch): run the suite against a REAL agent.
   # Costs LLM tokens and needs API-key secrets, so it never runs on push/PR.
-  # NOTE: aikit supports claude, codex, cursor, gemini, opencode, pi and aikit,
+  # NOTE: aikit supports aikit, claude, codex, cursor, gemini and pi,
   # but `--agent` only accepts a key whose CLI is installed on the runner --
   # an uninstalled agent fails with RUNTIME_UNKNOWN_ID, same as a typo. The
   # choices below are limited to the two this job installs a CLI for.
