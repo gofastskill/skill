@@ -11,7 +11,7 @@ Evals run repeatable prompts against a real agent. By default each case runs **i
 1. **FastSkill CLI** installed (`fastskill --version`).
 2. A **`skill-project.toml`** reachable from the current directory (FastSkill walks up the tree to find it).
 3. **`[tool.fastskill.eval]`** present with a valid `prompts` path (see below).
-4. For **`fastskill eval run`**: a **runnable agent** installed and on `PATH`. Agent keys are a closed set defined by aikit-sdk: `claude`, `codex`, `cursor`, `gemini`, `opencode`, `pi`, `aikit` — the last runs in-process and needs no CLI. If `fail_on_missing_agent = true` (default), the CLI refuses to run when the chosen agent is missing.
+4. For **`fastskill eval run`**: a **runnable agent** installed and on `PATH`. Agent keys are a closed set defined by aikit-sdk: `aikit`, `claude`, `codex`, `cursor`, `gemini`, `pi` — the first runs in-process and needs no CLI. If `fail_on_missing_agent = true` (default), the CLI refuses to run when the chosen agent is missing.
 
    `--agent` is validated against the agents **detected on the current machine**, not against the full key list. An agent is "detected" when its CLI is on `PATH` and answers `--version`. So a supported-but-not-installed key fails exactly like a typo:
 
@@ -121,7 +121,7 @@ required = true
 
 ### `file_exists`
 
-True if `path` exists under the case **working directory** (project root or `project_root / workspace_subdir` for that case).
+True if `path` exists under the case **working directory**: the per-case scratch workspace under default isolation (see "Environment isolation" below), or `project_root` / `project_root / workspace_subdir` with `--no-isolation`.
 
 ```toml
 [[check]]
@@ -180,7 +180,7 @@ Non-zero exit on suite failure unless `--no-fail`.
 
 Every case runs in a per-case scratch workspace containing only the skill under test, with user-scope skill discovery suppressed per backend (claude `--setting-sources project`; codex via a scratch `CODEX_HOME`; pi `--no-skills --skill`). Isolation needs a **`SKILL.md`** beside `skill-project.toml` and a **`[metadata].id`** naming the skill — missing either is a loud `EVAL_ISOLATION_NO_SKILL` error, never a silent fallback.
 
-- The output's `isolation:` line and the `isolation` object in `summary.json` report what each run actually got (per-scope fidelity, mechanism, degrade reason, ambient skills when observable). Backends without a suppression mechanism (e.g. gemini, cursor) run with user scope reported `unsupported`; opencode degrades to inherit with a recorded reason.
+- The output's `isolation:` line and the `isolation` object in `summary.json` report what each run actually got (per-scope fidelity, mechanism, degrade reason, ambient skills when observable). Backends without a suppression mechanism (e.g. gemini, cursor) run with user scope reported `unsupported`; a backend that cannot honour isolation degrades to inherit with a recorded reason.
 - A **failed** case's scratch workspace is kept under `<run-dir>/workspaces/` for debugging; successful ones are deleted.
 - `--no-isolation` restores the legacy behaviour: cwd is the project root and the agent sees everything installed on the machine.
 - Trigger rates measured before isolation existed were taken against the ambient environment — expect scores to re-baseline on the first isolated run.
@@ -190,7 +190,7 @@ Every case runs in a per-case scratch workspace containing only the skill under 
 Under each run directory (one per agent):
 
 - **`summary.json`**: suite-level metadata (`suite_pass`, agent, model, paths, `isolation`, per-case summaries with trials).
-- **`<case-id>/trial-<n>/`**: `stdout.txt`, `stderr.txt`, `trace.jsonl`, `result.json` (`CaseResult`, including `check_results`).
+- **`<case-id>/trial-<n>/`**: `stdout.txt`, `stderr.txt`, `trace.jsonl`, `result.json` (`TrialResult`, including `check_results`).
 - **`<case-id>/aggregated.json`**: per-case trial aggregation (pass count, pass rate, status).
 - **`workspaces/`**: retained scratch workspaces of failed cases (isolation only).
 
@@ -199,21 +199,23 @@ Under each run directory (one per agent):
 ## 6. Report and re-score
 
 ```bash
-fastskill eval report --run-dir ./eval-runs/2026-04-07T12-00-00Z
-fastskill eval report --run-dir ./eval-runs/2026-04-07T12-00-00Z --json
+fastskill eval report --run-dir ./eval-runs/2026-04-07T12-00-00Z/codex
+fastskill eval report --run-dir ./eval-runs/2026-04-07T12-00-00Z/codex --json
 ```
+
+`--run-dir` is the **per-agent** directory (`<output-dir>/<timestamp>/<agent>`, the one holding `summary.json`), not the timestamp directory above it.
 
 Re-run deterministic checks on saved stdout/trace without invoking the agent:
 
 ```bash
-fastskill eval score --run-dir ./eval-runs/2026-04-07T12-00-00Z
+fastskill eval score --run-dir ./eval-runs/2026-04-07T12-00-00Z/codex
 ```
 
 **Note:** `eval score` applies `file_exists` relative to **`skill_project_root`** from `summary.json` — not per-case `workspace_subdir`, and not the (deleted) scratch workspace the case originally ran in. If you rely on workspace-specific files, prefer re-running `eval run` or align check paths with that root. A run whose `summary.json` contains zero cases refuses to re-score (`EVAL_EMPTY_SUITE`).
 
 ## 7. Packaging and CI
 
-- **`fastskill package`** excludes an `evals/` tree from published ZIPs (local eval suites are not shipped). Keep prompts/checks under `evals/` or paths you do not publish if you treat evals as repo-only.
+- The CLI has no `package`/`publish` command. If you ship the skill by other means (Git, ZIP, a registry pipeline), keep prompts/checks under `evals/` or another path you leave out of the shipped artifact if you treat evals as repo-only.
 - In CI, install the CLI and the agent you pass to `--agent`, add `[tool.fastskill.eval]`, then run `eval validate` and `eval run` with a writable `--output-dir`.
 
 ## Quick checklist
