@@ -35,6 +35,33 @@ trusting any number this suite produces.
 This is why positive patterns pair a flag with a value invented for the prompt: `--tag` is
 vacuous, `--tag v2.1.0` is not.
 
+## The oracles are themselves tested
+
+Three layers, because a broken measurement is worse than no measurement:
+
+| Script | What it proves | When it runs |
+|---|---|---|
+| `guard_vacuity.py` | no pattern occurs in the skill payload, so no oracle passes on a mere read | hard precondition of every `run.sh` |
+| `negctl.sh` | the consultation oracle *fails* when the skill read is deleted from a real trace | after a sweep, against real artifacts |
+| `test_aggregate.py` | the four metrics match hand-computed answers on a synthetic sweep | any time, no agent needed |
+
+```bash
+python3 evals/v2/test_aggregate.py
+evals/v2/negctl.sh ./eval-runs/v2/consultation/<timestamp>/pi
+```
+
+`negctl.sh` copies one real completed case twice, strips every trace line naming the
+skill path from one copy, and re-scores both with `fastskill eval score`. Measured on
+the first pi sweep:
+
+```
+  present  passed 1.00 [('trigger_expectation', True),  ('max_tool_calls', True)]
+  absent   failed 0.00 [('trigger_expectation', False), ('max_tool_calls', True)]
+```
+
+Exactly one trace line per trial carries the read, and `max_tool_calls` is unmoved, so
+the flip is attributable to the consultation check alone.
+
 ## Agent support
 
 The oracle is the skill path in a `read` call because `pi` has no `Skill` tool — it loads
