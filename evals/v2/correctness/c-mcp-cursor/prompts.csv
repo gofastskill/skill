@@ -1,0 +1,2 @@
+id,prompt,should_trigger,tags,workspace_subdir
+c-mcp-cursor,"Wire fastskill into Cursor as an MCP server, configured for this project only rather than globally. Give me the exact command.",true,correctness,

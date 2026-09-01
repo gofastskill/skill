@@ -1,0 +1,246 @@
+{
+  "_comment": "Single source of truth for spec 001. Every pattern here is checked against SKILL.md by guard_vacuity.py; a pattern that occurs in the skill document is an oracle that cannot fail (spec 001 C4) and fails the guard.",
+  "consultation_pattern": "skills/fastskill/SKILL.md",
+  "max_tool_calls": 25,
+  "consultation": [
+    [
+      "op-init",
+      "I'm starting a new skill project. How do I scaffold the config file?",
+      "init"
+    ],
+    [
+      "op-add-git",
+      "Add a skill from a GitHub repository to my project",
+      "add"
+    ],
+    [
+      "op-add-editable",
+      "I'm developing a skill locally and want to edit it in place while it stays installed",
+      "add"
+    ],
+    [
+      "op-add-recursive",
+      "I have a folder containing many skills. Install every one of them at once.",
+      "add"
+    ],
+    [
+      "op-install-manifest",
+      "How do I install skills from a skill-project.toml manifest?",
+      "install"
+    ],
+    [
+      "op-install-lock",
+      "Make my skill installs byte-for-byte reproducible on another machine",
+      "install"
+    ],
+    [
+      "op-list",
+      "Show which skills are installed and whether they match the lockfile",
+      "list"
+    ],
+    [
+      "op-read",
+      "Print the documentation and dependency tree of one installed skill",
+      "read"
+    ],
+    [
+      "op-remove",
+      "Uninstall a skill and clean it out of my manifest and lockfile",
+      "remove"
+    ],
+    [
+      "op-update",
+      "Check what would change if I updated my skills, without actually writing anything",
+      "update"
+    ],
+    [
+      "op-reindex",
+      "Rebuild the local vector index after adding skills",
+      "reindex"
+    ],
+    [
+      "op-search",
+      "Find installed skills related to creating presentations",
+      "search"
+    ],
+    [
+      "op-repos-add",
+      "Add a git-marketplace repository as a skill source",
+      "repos"
+    ],
+    [
+      "op-repos-browse",
+      "Browse which skills a configured registry offers, and see one skill's versions",
+      "repos"
+    ],
+    [
+      "op-marketplace",
+      "Create a marketplace.json catalog from a folder of skills",
+      "marketplace"
+    ],
+    [
+      "op-analyze",
+      "Find near-duplicate skills across my collection",
+      "analyze"
+    ],
+    [
+      "op-optimize",
+      "Explain, without running anything, how to automatically improve a skill so it triggers more reliably",
+      "optimize"
+    ],
+    [
+      "op-serve",
+      "Run a local HTTP API and web UI for my installed skills",
+      "serve"
+    ],
+    [
+      "op-mcp",
+      "Expose fastskill to Claude Code and Cursor as MCP tools",
+      "mcp"
+    ],
+    [
+      "op-doctor",
+      "Diagnose why semantic search is not returning results",
+      "doctor"
+    ],
+    [
+      "op-eval",
+      "How do I run quality evaluations on a skill before shipping it?",
+      "eval"
+    ],
+    [
+      "op-auth",
+      "My skill registry is private. How do I give fastskill credentials for it without putting a token in the config file?",
+      "auth"
+    ]
+  ],
+  "restraint": [
+    [
+      "off-python-list",
+      "How do I remove duplicates from a Python list while preserving order?",
+      "python"
+    ],
+    [
+      "off-git-rebase",
+      "What is the difference between git rebase and git merge?",
+      "git"
+    ],
+    [
+      "off-docker",
+      "Write a multi-stage Dockerfile for a Go binary",
+      "docker"
+    ],
+    [
+      "off-sql",
+      "Write a SQL query that returns the second highest salary per department",
+      "sql"
+    ],
+    [
+      "off-npm",
+      "How do I pin an exact dependency version in package.json with npm?",
+      "npm"
+    ],
+    [
+      "off-pip",
+      "What is the difference between pip install -e . and pip install .?",
+      "pip"
+    ],
+    [
+      "off-regex",
+      "Write a regex that matches an ISO 8601 timestamp",
+      "regex"
+    ],
+    [
+      "off-k8s",
+      "Why is my Kubernetes pod stuck in CrashLoopBackOff?",
+      "k8s"
+    ]
+  ],
+  "correctness": [
+    {
+      "id": "c-tag-pin",
+      "prompt": "Install the skill at https://github.com/acme/widgets.git, pinned to the release tagged v2.1.0. Give me the exact command.",
+      "require": [
+        "--tag v2.1.0"
+      ]
+    },
+    {
+      "id": "c-branch-pin",
+      "prompt": "Install the skill at https://github.com/acme/widgets.git from its release-42 branch. Give me the exact command.",
+      "require": [
+        "--branch release-42"
+      ]
+    },
+    {
+      "id": "c-group-add",
+      "prompt": "Add https://github.com/acme/widgets.git to my project but keep it in a dependency group called qa. Give me the exact command.",
+      "require": [
+        "--group qa"
+      ]
+    },
+    {
+      "id": "c-install-only",
+      "prompt": "My manifest has several dependency groups. Install only the group named staging. Give me the exact command.",
+      "require": [
+        "--only staging"
+      ]
+    },
+    {
+      "id": "c-install-without",
+      "prompt": "Install everything in my manifest except the group named docs. Give me the exact command.",
+      "require": [
+        "--without docs"
+      ]
+    },
+    {
+      "id": "c-serve-port",
+      "prompt": "Start the fastskill server on port 9123 and allow state-changing endpoints. Give me the exact command.",
+      "require": [
+        "--port 9123"
+      ]
+    },
+    {
+      "id": "c-search-limit",
+      "prompt": "Search my installed skills for invoice parsing. I want at most 3 results. Give me the exact command.",
+      "require": [
+        "--limit 3"
+      ]
+    },
+    {
+      "id": "c-analyze-threshold",
+      "prompt": "Report near-duplicate skills in my collection using a similarity threshold of 0.97. Give me the exact command.",
+      "require": [
+        "--threshold 0.97"
+      ]
+    },
+    {
+      "id": "c-marketplace-baseurl",
+      "prompt": "Build a marketplace catalog from ./team-skills whose download links point at https://cdn.acme.io/skills/. Give me the exact command.",
+      "require": [
+        "--base-url https://cdn.acme.io/skills/"
+      ]
+    },
+    {
+      "id": "c-mcp-cursor",
+      "prompt": "Wire fastskill into Cursor as an MCP server, configured for this project only rather than globally. Give me the exact command.",
+      "require": [
+        "--agent cursor"
+      ]
+    },
+    {
+      "id": "c-repos-priority",
+      "prompt": "Register an HTTP registry named acme-reg at https://reg.acme.io/index and give it priority 7. Give me the exact command.",
+      "require": [
+        "--priority 7"
+      ]
+    },
+    {
+      "id": "c-no-publish",
+      "prompt": "Publish my finished skill to the public fastskill registry so other people can install it by name.",
+      "require": [],
+      "forbid": [
+        "fastskill publish"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,2 @@
+id,prompt,should_trigger,tags,workspace_subdir
+c-no-publish,Publish my finished skill to the public fastskill registry so other people can install it by name.,true,correctness,

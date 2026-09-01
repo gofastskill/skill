@@ -1,0 +1,9 @@
+id,prompt,should_trigger,tags,workspace_subdir
+off-python-list,How do I remove duplicates from a Python list while preserving order?,false,python,
+off-git-rebase,What is the difference between git rebase and git merge?,false,git,
+off-docker,Write a multi-stage Dockerfile for a Go binary,false,docker,
+off-sql,Write a SQL query that returns the second highest salary per department,false,sql,
+off-npm,How do I pin an exact dependency version in package.json with npm?,false,npm,
+off-pip,What is the difference between pip install -e . and pip install .?,false,pip,
+off-regex,Write a regex that matches an ISO 8601 timestamp,false,regex,
+off-k8s,Why is my Kubernetes pod stuck in CrashLoopBackOff?,false,k8s,

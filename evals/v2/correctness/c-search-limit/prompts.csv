@@ -1,0 +1,2 @@
+id,prompt,should_trigger,tags,workspace_subdir
+c-search-limit,Search my installed skills for invoice parsing. I want at most 3 results. Give me the exact command.,true,correctness,

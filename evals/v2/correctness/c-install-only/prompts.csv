@@ -1,0 +1,2 @@
+id,prompt,should_trigger,tags,workspace_subdir
+c-install-only,My manifest has several dependency groups. Install only the group named staging. Give me the exact command.,true,correctness,

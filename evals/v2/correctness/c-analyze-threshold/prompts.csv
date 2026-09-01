@@ -1,0 +1,2 @@
+id,prompt,should_trigger,tags,workspace_subdir
+c-analyze-threshold,Report near-duplicate skills in my collection using a similarity threshold of 0.97. Give me the exact command.,true,correctness,
