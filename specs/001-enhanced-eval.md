@@ -329,7 +329,7 @@ trials that made the raw skill-open rate read 96.4% instead of 100%.
 4. Self-test the aggregator: `python3 evals/v2/test_aggregate.py`. **Done** — 21
    assertions against hand-computed answers on a synthetic sweep.
 5. Run the sweep: `evals/v2/run.sh pi ./eval-runs/v2 5`. **Done** — 2026-09-01,
-   210 trials, $5.81, ~4h wall clock.
+   210 trials, $5.81, 59 min wall clock (consultation is ~50 min of it).
 6. Aggregate: `python3 evals/v2/aggregate.py ./eval-runs/v2`. **Done** — §6.
 7. Ratify the thresholds against the baseline. **Done** — §6, §7.6.
 
