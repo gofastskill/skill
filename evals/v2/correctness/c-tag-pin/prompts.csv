@@ -1,0 +1,2 @@
+id,prompt,should_trigger,tags,workspace_subdir
+c-tag-pin,"Install the skill at https://github.com/acme/widgets.git, pinned to the release tagged v2.1.0. Give me the exact command.",true,correctness,

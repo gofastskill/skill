@@ -4,11 +4,14 @@
 
 ```
 gofastskill/skill/
-├── evals/                        # Eval suite (not packaged in the skill ZIP)
-│   ├── prompts.csv               # Eval cases
-│   ├── checks.toml               # Deterministic scoring checks
+├── evals/                        # Eval suites (not packaged in the skill ZIP)
+│   ├── README.md                 # How to run both suites, and the methodology
+│   ├── prompts.csv               # v1 eval cases
+│   ├── checks.toml               # v1 deterministic scoring checks
 │   ├── fixtures/                 # Recorded runs for offline `eval score` tests
-│   └── agent-eval.Dockerfile     # Container for live agent runs
+│   ├── agent-eval.Dockerfile     # Container for live agent runs
+│   └── v2/                       # Enhanced suite (specs/001) — recall, restraint, correctness
+├── specs/                        # Design records for non-obvious changes
 └── fastskill/                    # Shippable skill
     ├── SKILL.md                  # Skill documentation
     ├── skill-project.toml        # Metadata + [tool.fastskill.eval] → ../evals/*
@@ -29,6 +32,11 @@ from the `fastskill/` directory so path resolution finds that manifest and `../e
 
 The skill ships an eval suite so its trigger behavior and guidance stay correct. Config lives
 in `[tool.fastskill.eval]` in `fastskill/skill-project.toml` and points at `../evals/`.
+
+The commands below cover the default (v1) suite, which is what CI gates. There is a second,
+larger suite under `evals/v2/` that measures recall, restraint and answer correctness across
+five trials per case; it runs on demand rather than in CI. **[`evals/README.md`](evals/README.md)
+covers both suites and the methodology** — read it before adding or changing an eval case.
 
 ### Validate (deterministic, no agent)
 
@@ -68,18 +76,24 @@ docker build -f evals/agent-eval.Dockerfile -t fastskill-evals .
 docker run --rm -e OPENAI_API_KEY="$OPENAI_API_KEY" fastskill-evals codex
 ```
 
-Checks are **global** — every check in `checks.toml` is applied to every case — so eval cases
-are all positive (`should_trigger = true`); the deterministic model can't express per-case
-negative assertions. See `fastskill/references/eval.md` for the prompts/checks schema and
-artifact layout.
+Checks are **global** — every check in `checks.toml` is applied to every case — so v1's cases
+are all positive (`should_trigger = true`). Note that `should_trigger` is documentation only:
+it is parsed into the case and never read by a check, so it asserts nothing by itself. A
+negative expectation has to be written as a check with `expected = false`, and because checks
+are global that means a separate suite — which is how `evals/v2/` expresses per-case
+assertions. See `fastskill/references/eval.md` for the prompts/checks schema and artifact
+layout.
 
 ## CI/CD
 
 `.github/workflows/skill-evals.yml` gates changes to the skill/eval files:
 
 - **validate** and **score-fixtures** run on every push/PR — deterministic, no agent, no tokens.
-- **live-eval** is opt-in via *Run workflow* (`workflow_dispatch`), runs the suite against a real
-  agent, and needs `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` secrets.
+- **live-eval** is opt-in via *Run workflow* (`workflow_dispatch`), runs the v1 suite against a
+  real agent, and needs `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` secrets.
+
+No CI job runs `evals/v2/` — at roughly $6 and an hour per sweep it belongs on a schedule or a
+manual trigger, and nothing enforces its thresholds yet.
 
 `.github/workflows/publish-skill.yml`:
 

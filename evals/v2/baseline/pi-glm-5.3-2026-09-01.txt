@@ -1,0 +1,62 @@
+==========================================================================
+SPEC 001 SWEEP - metrics (S6)
+==========================================================================
+  Skill-open rate          100.0%   (106/106 trials, 22 cases)   gate 85% -> PASS
+  Restraint rate           100.0%   (40/40 trials, 8 cases)   gate 90% -> PASS
+  Answer accuracy           96.7%   (58/60 trials, 12 cases)   gate 80% -> PASS
+  Tool-budget compliance    92.5%   (98/106 trials, 22 cases)   gate 90% -> PASS
+  Efficiency (p95 tools)       30   (median 8, max 50, n=106)   gate <=25 -> BELOW GATE
+  Dead trials                   4   excluded from every rate above (op-list x4)
+  Cost                     $  5.81   over 210 trials ($0.0277/trial)   reported, not gated
+
+--------------------------------------------------------------------------
+PER-CASE DETAIL   (trials passed/run, mean tool calls per trial)
+--------------------------------------------------------------------------
+
+consultation:
+  op-list                  1/1  #xxxx  tools mean  16.0 max  16  [4 dead]
+  op-repos-browse          1/5  #....  tools mean  35.4 max  50  <- max_tool_calls x4
+  op-install-lock          3/5  ###..  tools mean  23.8 max  38  <- max_tool_calls x2
+  op-doctor                4/5  ####.  tools mean  16.2 max  28  <- max_tool_calls x1
+  op-serve                 4/5  ####.  tools mean  16.6 max  30  <- max_tool_calls x1
+  op-add-editable          5/5  #####  tools mean   3.8 max   6
+  op-add-git               5/5  #####  tools mean   2.2 max   3
+  op-add-recursive         5/5  #####  tools mean  12.6 max  24
+  op-analyze               5/5  #####  tools mean  20.0 max  24
+  op-auth                  5/5  #####  tools mean   1.0 max   1
+  op-eval                  5/5  #####  tools mean   2.0 max   2
+  op-init                  5/5  #####  tools mean   1.2 max   2
+  op-install-manifest      5/5  #####  tools mean   1.0 max   1
+  op-marketplace           5/5  #####  tools mean   9.0 max  12
+  op-mcp                   5/5  #####  tools mean  11.6 max  15
+  op-optimize              5/5  #####  tools mean   2.8 max   3
+  op-read                  5/5  #####  tools mean   7.4 max   9
+  op-reindex               5/5  #####  tools mean  16.2 max  19
+  op-remove                5/5  #####  tools mean   9.0 max  18
+  op-repos-add             5/5  #####  tools mean   8.4 max  11
+  op-search                5/5  #####  tools mean   9.4 max  12
+  op-update                5/5  #####  tools mean   8.2 max  15
+
+restraint:
+  off-docker               5/5  #####  tools mean   6.8 max  15
+  off-git-rebase           5/5  #####  tools mean   0.0 max   0
+  off-k8s                  5/5  #####  tools mean   0.4 max   2
+  off-npm                  5/5  #####  tools mean   0.0 max   0
+  off-pip                  5/5  #####  tools mean   0.0 max   0
+  off-python-list          5/5  #####  tools mean   0.0 max   0
+  off-regex                5/5  #####  tools mean   0.0 max   0
+  off-sql                  5/5  #####  tools mean   0.4 max   1
+
+correctness:
+  c-no-publish             3/5  ###..  tools mean   5.0 max   7  <- trigger_expectation x2
+  c-analyze-threshold      5/5  #####  tools mean   1.0 max   1
+  c-branch-pin             5/5  #####  tools mean   1.0 max   1
+  c-group-add              5/5  #####  tools mean   1.8 max   4
+  c-install-only           5/5  #####  tools mean   1.0 max   1
+  c-install-without        5/5  #####  tools mean   3.8 max   9
+  c-marketplace-baseurl    5/5  #####  tools mean   2.2 max   3
+  c-mcp-cursor             5/5  #####  tools mean   2.0 max   4
+  c-repos-priority         5/5  #####  tools mean   2.0 max   2
+  c-search-limit           5/5  #####  tools mean   1.2 max   2
+  c-serve-port             5/5  #####  tools mean   1.0 max   1
+  c-tag-pin                5/5  #####  tools mean   1.0 max   1

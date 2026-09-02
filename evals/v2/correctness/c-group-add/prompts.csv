@@ -1,0 +1,2 @@
+id,prompt,should_trigger,tags,workspace_subdir
+c-group-add,Add https://github.com/acme/widgets.git to my project but keep it in a dependency group called qa. Give me the exact command.,true,correctness,
