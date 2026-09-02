@@ -250,18 +250,42 @@ occurrence can only be the agent inventing it.
 
 ## 6. Metrics and acceptance thresholds
 
-Reported per agent, five trials per case:
+Reported per agent, five trials per case. Each metric names the exact check it
+aggregates: a consultation trial carries two required checks, and folding them into one
+suite pass-rate would report a tool-budget overrun as a recall failure.
 
-| Metric | Definition | CI gate (after baseline) |
-|---|---|---|
-| Skill-open rate | passing consultation trials / total | ≥ 0.85 |
-| Restraint rate | passing restraint trials / total | ≥ 0.90 |
-| Answer accuracy | passing correctness trials / total | ≥ 0.80 |
-| Efficiency | p95 tool calls per consultation case | ≤ 25 |
-| Cost | USD per full sweep | reported, not gated |
+| Metric | Checks aggregated | Gate | Baseline (pi / glm-5.3) |
+|---|---|---|---|
+| Skill-open rate | consultation `trigger_expectation` | ≥ 0.85 | **100.0%** (106/106) |
+| Restraint rate | restraint `trigger_expectation` | ≥ 0.90 | **100.0%** (40/40) |
+| Answer accuracy | correctness `command_contains` + `trigger_expectation` | ≥ 0.80 | **96.7%** (58/60) |
+| Tool-budget compliance | consultation `max_tool_calls` | ≥ 0.90 | **92.5%** (98/106) |
+| Efficiency | p95 tool calls per consultation trial | ≤ 25 | **30** (median 8, max 50) |
+| Cost | USD per full sweep | reported, not gated | **$5.81** / 210 trials |
 
-Thresholds are proposals to be ratified against the first baseline, not asserted in
-advance. Gating before a baseline exists is how a suite gets disabled.
+Baseline measured 2026-09-01, 42 cases x 5 trials, commit `a10df77`.
+
+Thresholds were proposals to be ratified against the first baseline, not asserted in
+advance. Gating before a baseline exists is how a suite gets disabled. Ratified: the four
+rate gates hold and stay as written. The efficiency gate does **not** hold and is
+deliberately left at 25 — see §7.6.
+
+### 6.1 Dead trials are excluded from every rate
+
+A provider timeout or connection error yields a trial with a complete-looking artifact
+set and zero model output. Such a trial **passes every negative oracle**, because an
+absent pattern is absent: an outage would score as perfect restraint and perfect
+tool-budget compliance. `aggregate.py` therefore classifies a trial as dead when its
+trace carries no assistant message text, excludes it from all rates, and reports the
+count separately.
+
+The discriminator is assistant text, not tool calls. A restraint trial correctly makes
+zero tool calls and still answers at length; an earlier draft keyed on tool calls and
+misclassified 32 healthy restraint trials as dead.
+
+In the baseline sweep exactly 4 of 210 trials were dead, all on `op-list`, all
+`Request timed out.` after three provider retries — and they were precisely the four
+trials that made the raw skill-open rate read 96.4% instead of 100%.
 
 ## 7. Known limitations, stated so they are not mistaken for rigour
 
@@ -280,13 +304,52 @@ advance. Gating before a baseline exists is how a suite gets disabled.
    which the eval engine does not have.
 5. **No per-case checks upstream.** The one-directory-per-assertion layout is a workaround
    for C1. If `aikit-evals` grows per-case checks, correctness collapses into one suite.
+6. **The efficiency gate is not met and is left unmet on purpose.** p95 is 30 against a
+   gate of 25, driven by four browse-shaped cases (`op-repos-browse` 35.4 mean / 50 max,
+   `op-install-lock` 23.8/38, `op-serve` 16.6/30, `op-doctor` 16.2/28). Raising the gate
+   to fit the observation would make it unfalsifiable; the honest reading is that the
+   skill costs an agent ~30 tool calls to answer a browse-shaped question, and that is a
+   finding about the skill, not about the threshold. Whoever narrows those four cases
+   should re-measure rather than re-tune.
+7. **A dead trial is invisible in `summary.json`.** The engine records it as an ordinary
+   failed (or passed) trial. Only the trace distinguishes it, which is why §6.1 exists.
+   The eval cannot tell a provider outage from a model refusal without reading traces.
 
 ## 8. Execution plan
 
-1. Author `patterns.json`, the suites, the guard, and the runner.
-2. Run the guard. It must report zero vacuous patterns before any agent runs.
-3. Negative-control the oracles: confirm the consultation pattern is absent from a
-   restraint trace and present in a consultation trace, on real artifacts.
-4. Run the full sweep against `pi` with five trials, `--no-fail`.
-5. Aggregate and report the four metrics with per-case detail.
-6. Ratify thresholds, then wire the gate.
+1. Generate the suites: `python3 evals/v2/build.py`. **Done** — 14 suites.
+2. Guard against vacuity: `python3 evals/v2/guard_vacuity.py`. **Done** — hard
+   precondition of every run; it caught three patterns (`--enable-write`, `--local`,
+   `--scope project`) whose literal text appears in `SKILL.md` and which therefore could
+   never have failed. They were dropped.
+3. Negative-control the oracles: `evals/v2/negctl.sh <run-dir>`. **Done** — on real
+   `pi` artifacts, deleting the single trace line that carries the skill read flips
+   `trigger_expectation` from 5/5 to 0/5 while `max_tool_calls` stays true, so the flip
+   is attributable to the consultation check alone.
+4. Self-test the aggregator: `python3 evals/v2/test_aggregate.py`. **Done** — 21
+   assertions against hand-computed answers on a synthetic sweep.
+5. Run the sweep: `evals/v2/run.sh pi ./eval-runs/v2 5`. **Done** — 2026-09-01,
+   210 trials, $5.81, ~4h wall clock.
+6. Aggregate: `python3 evals/v2/aggregate.py ./eval-runs/v2`. **Done** — §6.
+7. Ratify the thresholds against the baseline. **Done** — §6, §7.6.
+
+The baseline report is committed at `evals/v2/baseline/pi-glm-5.3-2026-09-01.txt`.
+
+## 9. Findings from the first baseline
+
+1. **`fastskill publish` does not exist and `pi` recommends it anyway.** On
+   `c-no-publish` ("Publish my finished skill to the public fastskill registry"), 2 of 5
+   trials emitted `fastskill publish`. Verified absent from `fastskill --help`. This is
+   the only genuine wrong-answer in the sweep, and it is a hallucinated command, not a
+   wrong flag — the worst failure shape, because it is copy-pasteable. The skill has no
+   text telling an agent that publishing is unsupported.
+2. **Recall is not the problem; tool budget is.** Every non-dead consultation trial
+   opened the skill. Eight trials across four cases blew the 25-call budget, all on
+   browse-shaped questions. See §7.6.
+3. **Restraint is unambiguous.** 40/40, and the off-topic answers are real answers —
+   `off-npm` returns an 879 KB correct explanation of `npm install --save-exact` without
+   ever mentioning fastskill. The skill does not over-trigger.
+4. **The eval was measuring the provider, not the model, until §6.1 landed.** Four
+   `op-list` trials timed out at the provider and were scored as recall failures. That
+   is a defect in the measurement, found by reading the traces of the only case that
+   failed, and it is the reason the raw number was 96.4%.
