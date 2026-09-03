@@ -6,11 +6,11 @@ engine constraints it works around.
 
 ## What it measures
 
-| Suite | Question | Oracle |
+| Suite | Question | How it is checked |
 |---|---|---|
-| `consultation/` | Is the skill opened when it should be? | the materialized skill path appears in a `read` tool call |
-| `restraint/` | Is it left alone when it should be? | the same path is **absent** |
-| `correctness/<id>/` | Is the answer right? | a scenario-unique flag+value the agent can only have synthesized |
+| `consultation/` | Is the skill opened when it should be? | `should_trigger = true` on every case, which generates a `skill_invoked` check |
+| `restraint/` | Is it left alone when it should be? | `should_trigger = false`, generating the same check with inverted polarity |
+| `correctness/` | Is the answer right? | one `command_contains` per case, scoped to it, on a scenario-unique flag and value |
 
 ## Layout
 
@@ -18,10 +18,33 @@ Everything is generated from `patterns.json`. Do not hand-edit the suites.
 
 ```bash
 python3 evals/v2/build.py          # regenerate suites from patterns.json
-python3 evals/v2/guard_vacuity.py  # prove no oracle can pass vacuously
+python3 evals/v2/guard_vacuity.py  # prove no check can pass on a mere read
 ./evals/v2/run.sh pi ./eval-runs/v2 5
-python3 evals/v2/aggregate.py ./eval-runs/v2
 ```
+
+`run.sh` ends by folding every run into the metrics in `metrics.toml`, so there is no
+separate aggregation step. To re-fold an existing sweep without re-running it:
+
+```bash
+fastskill eval scorecard --root ./eval-runs/v2 --metrics evals/v2/metrics.toml
+```
+
+## Three suites, not fourteen
+
+Correctness used to be twelve single-case suites. A suite's checks applied to all of its
+cases and there was no way to say otherwise, so two cases needing different assertions could
+not share one. `[[check]]` entries now take a `cases` list, and the twelve collapse into one
+suite whose checks are each scoped to the case they belong to.
+
+Skill invocation is no longer written into any `checks.toml`. The `should_trigger` column
+generates it. That column used to be parsed and read by nothing, so a case marked `false`
+asserted nothing at all while every reader of the CSV assumed otherwise. `restraint/`'s
+checks file is now a header and nothing else, and it is still fully scored.
+
+Correctness cases are on-topic, so they keep `should_trigger = true` and gain the generated
+check too. That is a second, independent assertion rather than a dilution of the first: the
+scorecard keeps a rate per check type, so consulting the skill and answering correctly are
+reported as the separate things they are.
 
 ## The vacuity guard is not optional
 
@@ -35,37 +58,61 @@ trusting any number this suite produces.
 This is why positive patterns pair a flag with a value invented for the prompt: `--tag` is
 vacuous, `--tag v2.1.0` is not.
 
-## The oracles are themselves tested
+Only the text patterns need the guard. Skill invocation is checked against decoded tool-use
+frames rather than trace text, so no string in the payload can satisfy it.
 
-Three layers, because a broken measurement is worse than no measurement:
+## The checks are themselves tested
+
+Two layers, because a broken measurement is worse than no measurement:
 
 | Script | What it proves | When it runs |
 |---|---|---|
-| `guard_vacuity.py` | no pattern occurs in the skill payload, so no oracle passes on a mere read | hard precondition of every `run.sh` |
-| `negctl.sh` | the consultation oracle *fails* when the skill read is deleted from a real trace | after a sweep, against real artifacts |
-| `test_aggregate.py` | the four metrics match hand-computed answers on a synthetic sweep | any time, no agent needed |
+| `guard_vacuity.py` | no pattern occurs in the skill payload, so no check passes on a mere read | hard precondition of every `run.sh` |
+| `negctl.sh` | the consultation check *fails* when the skill read is deleted from a real trace | after a sweep, against real artifacts |
 
 ```bash
-python3 evals/v2/test_aggregate.py
 evals/v2/negctl.sh ./eval-runs/v2/consultation/<timestamp>/pi
 ```
 
-`negctl.sh` copies one real completed case twice, strips every trace line naming the
-skill path from one copy, and re-scores both with `fastskill eval score`. Measured on
-the first pi sweep:
+`negctl.sh` copies one real completed case twice, strips every trace line naming the staged
+skill path from one copy, and re-scores both with `fastskill eval score`. Measured on the
+first pi sweep, when the check was still a text expectation:
 
 ```
   present  passed 1.00 [('trigger_expectation', True),  ('max_tool_calls', True)]
   absent   failed 0.00 [('trigger_expectation', False), ('max_tool_calls', True)]
 ```
 
-Exactly one trace line per trial carries the read, and `max_tool_calls` is unmoved, so
-the flip is attributable to the consultation check alone.
+Exactly one trace line per trial carries the read, and `max_tool_calls` is unmoved, so the
+flip is attributable to the consultation check alone. The check is now `skill_invoked` and
+the control reads the path it matches out of each trial's `result.json`, so it deletes the
+evidence the check reads rather than a string that resembles it.
 
 ## Agent support
 
-The oracle is the skill path in a `read` call because `pi` has no `Skill` tool — it loads
-skills via `--no-skills --skill <path>` and exposes only `read`, `bash`, `edit`, `write`.
-Agents that *do* expose a `Skill` tool (Claude Code) should use the `skill_invoked` check
-instead; `patterns.json` would need an agent-keyed oracle to run both in one sweep. Out of
-scope for spec 001, which measures `pi`.
+Skill invocation counts two shapes: a tool use named `Skill`, which only Claude Code emits,
+and **any** tool use whose input references the skill document's path. `pi` has no `Skill`
+tool — it loads skills via `--no-skills --skill <path>` and exposes only `read`, `bash`,
+`edit`, `write` — so a skill read arrives there as a `read` call with the path in its
+arguments. Both shapes satisfy the same check, so both agents run in one sweep with no
+agent-keyed configuration.
+
+Backends whose decoder emits no tool-use frames at all (`gemini`, `opencode`, `cursor`)
+cannot produce the evidence these suites need. `eval validate` and `eval run` refuse the
+combination up front rather than spending tokens on trials that could not be scored.
+
+## What the numbers exclude
+
+Two exclusions are applied by the tool, and neither is configurable here:
+
+- **Trials with outcome `error`.** A trial that produced no measurement still carries check
+  results, because the checks ran over an empty trace — where every negative expectation and
+  every tool-call ceiling passes vacuously. Counting them would report an outage as a clean
+  sweep. The scorecard reports the count separately.
+- **Check results marked not observable.** They record `passed: false` so that older readers
+  stay conservative, and are counted as neither a pass nor a failure by anything that
+  understands the field.
+
+Cost is summed from the vendor-reported figure only, and reads "not reported" when the
+backend supplied none. It is never estimated from a local price table: a stale estimate is
+indistinguishable from a real number once it reaches a report.

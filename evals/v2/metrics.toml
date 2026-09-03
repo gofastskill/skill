@@ -1,0 +1,74 @@
+# Metrics for the spec-001 sweep, read by `fastskill eval scorecard`.
+#
+# One entry per question the sweep answers. `cases` selects by case-id pattern, `*` matching
+# any run of characters, so a metric is tied to the ids in patterns.json rather than to the
+# directory a suite happens to live in. That is what let the twelve correctness suites
+# collapse into one without touching this file's meaning.
+#
+# `checks` names check *types*, not individual checks. A metric folds every result of those
+# types on every matching case into one rate over trials.
+#
+# Excluded from every rate below, by the tool and not by anything here:
+#   - trials with outcome `error`, which produced no measurement (R4)
+#   - check results marked not observable on this backend (R9)
+# A metric whose pattern matches nothing fails the command rather than disappearing.
+
+# ── The four gates of spec 001 section 6 ──────────────────────────────────────
+
+[[metric]]
+name = "Skill-open rate"
+kind = "check_rate"
+cases = ["op-*"]
+checks = ["skill_invoked"]
+min_rate = 0.85
+
+[[metric]]
+name = "Restraint rate"
+kind = "check_rate"
+cases = ["off-*"]
+checks = ["skill_invoked"]
+min_rate = 0.90
+
+# Both correctness check types fold into accuracy: eleven cases assert the answer contains
+# the right flag, and c-no-publish asserts it does not recommend publishing. Either way the
+# question is whether the answer was right.
+[[metric]]
+name = "Answer accuracy"
+kind = "check_rate"
+cases = ["c-*"]
+checks = ["command_contains", "trigger_expectation"]
+min_rate = 0.80
+
+[[metric]]
+name = "Tool-budget compliance"
+kind = "check_rate"
+cases = ["op-*"]
+checks = ["max_tool_calls"]
+min_rate = 0.90
+
+[[metric]]
+name = "Efficiency (p95 tool calls)"
+kind = "tool_calls_p95"
+cases = ["op-*"]
+max = 25
+
+# ── Reported, not gated ───────────────────────────────────────────────────────
+#
+# Two check results the sweep now produces that spec 001 set no bar for. They are claimed
+# here so they are reported rather than named as unread, and `min_rate = 0.0` says the bar
+# is absent, not met. Set a real one once there is a baseline to set it from; inventing a
+# number now would make an unmeasured threshold look like an agreed one.
+
+[[metric]]
+name = "Skill-open rate on correctness prompts (ungated)"
+kind = "check_rate"
+cases = ["c-*"]
+checks = ["skill_invoked"]
+min_rate = 0.0
+
+[[metric]]
+name = "Tool-budget compliance on correctness prompts (ungated)"
+kind = "check_rate"
+cases = ["c-*"]
+checks = ["max_tool_calls"]
+min_rate = 0.0

@@ -1,2 +1,0 @@
-id,prompt,should_trigger,tags,workspace_subdir
-c-serve-port,Start the fastskill server on port 9123 and allow state-changing endpoints. Give me the exact command.,true,correctness,

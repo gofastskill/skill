@@ -1,9 +1,35 @@
 # Spec 001 — Enhanced eval suite for the fastskill skill
 
-Status: proposed
+Status: implemented, amended
 Author: Alexandre Oliveira
 Date: 2026-09-01
 Target agent for the reference measurement: `pi` (zai / glm-5.3)
+
+> **Amendment, 2026-09-03.** Three of the engine constraints this spec designs around were
+> not laws of the engine, only its state at the time, and have since been removed upstream.
+> Sections 2 to 4 are kept as written because they record why the suite has the shape it
+> has; this note records what no longer applies.
+>
+> - **C1, checks are global.** `[[check]]` entries now take a `cases` list. The twelve
+>   single-case correctness suites collapsed into one suite with per-case checks, and P1
+>   ("one check per suite") is no longer forced.
+> - **`should_trigger` is unscored.** It now generates a `skill_invoked` check with
+>   matching polarity, so the consultation and restraint suites no longer write that check
+>   out by hand and `restraint/checks.toml` is a header and nothing else.
+> - **Skill invocation is a tool name.** It is now a path match against the input of any
+>   tool use, and still accepts the typed `Skill` tool. §7's note that the suite measures
+>   `pi` only no longer applies to this check.
+>
+> Two more changes land here rather than in the engine. A trial that produced no
+> measurement is decided on transport and terminal signal instead of the text heuristic of
+> §6.1, and the metrics of §6 moved from a Python post-processor to `fastskill eval
+> scorecard` reading `evals/v2/metrics.toml`. The engine-side rationale for all of this is
+> in [`docs/requirements/eval-measurement-integrity.md`](https://github.com/gofastskill/fastskill/blob/main/docs/requirements/eval-measurement-integrity.md)
+> in the fastskill repository.
+>
+> The informal coinages this investigation used — "dead trial", "oracle", "family" — are
+> retired in favour of the upstream vocabulary: a trial with outcome `error`, a check, and
+> a suite.
 
 ## 1. Why the current suite is not a performance measurement
 
@@ -30,7 +56,7 @@ Four properties make this a smoke test rather than a measurement.
 2. **No negative cases.** Every row asserts the skill should be used. Over-triggering —
    the skill hijacking unrelated prompts — is invisible, and it is the more expensive
    failure in daily use because it taxes every unrelated conversation.
-3. **No correctness oracle.** Both checks are structural. A run where the agent loads the
+3. **Nothing checks the answer.** Both checks are structural. A run where the agent loads the
    skill and then gives wrong advice scores identically to one where it gives right advice.
 4. **The tool-call ceiling never binds.** Observed usage ranges from 2 to 31 calls against
    a limit of 100, so the check cannot fail and contributes nothing.
@@ -84,8 +110,8 @@ composition of a real `pi` trace:
 | The final `result` payload | No — its `raw` is blanked |
 
 > **Consequence — the vacuity rule.** Any pattern that occurs in `SKILL.md` will match as
-> soon as the agent opens the file, regardless of what it answered. Such a check is an
-> oracle that cannot fail. **Every text pattern in this suite MUST be verified absent from
+> soon as the agent opens the file, regardless of what it answered. Such a check
+> cannot fail. **Every text pattern in this suite MUST be verified absent from
 > `SKILL.md`.** This is enforced mechanically by `evals/v2/guard_vacuity.py`, which fails
 > the build if any pattern is a substring of the skill document.
 
@@ -98,9 +124,10 @@ tracked `skill-project.toml`.
 
 ## 3. Design principles
 
-- **P1 — One oracle per suite.** Forced by C1, but also good practice: a suite reports one
-  number that means one thing.
-- **P2 — Non-vacuous oracles only.** Every pattern is proven absent from `SKILL.md` (C4).
+- **P1 — One check per suite.** Forced by C1 when this was written; kept afterwards only
+  where a suite genuinely reports one number that means one thing. Correctness no longer
+  obeys it, because per-case checks made the split unnecessary.
+- **P2 — Non-vacuous checks only.** Every pattern is proven absent from `SKILL.md` (C4).
   Positive patterns are made *scenario-unique*: they pair a real fastskill flag with a
   value invented for that prompt, so the string can only exist if the agent synthesized an
   answer for that scenario. `--tag` alone is vacuous; `--tag v2.1.0` is not.
@@ -109,10 +136,10 @@ tracked `skill-project.toml`.
   on off-topic prompts.
 - **P4 — Repeat, then report a rate.** Five trials per case. Report the rate, not a
   boolean. Gate on the rate.
-- **P5 — Prefer outcome oracles to text oracles** where the operation produces an artifact,
+- **P5 — Prefer outcome checks to text checks** where the operation produces an artifact,
   because a file either exists or it does not and no amount of echoing can fake it.
-- **P6 — Measurement runs do not gate.** The reference run uses `--no-fail` and aggregates
-  externally. Thresholds in §6 are for CI, applied once a baseline exists.
+- **P6 — Measurement runs do not gate.** Each suite runs with `--no-fail`; the thresholds
+  in §6 are applied once, afterwards, over the whole sweep. A failing case is data.
 
 ## 4. Suite architecture
 
@@ -124,12 +151,13 @@ evals/v2/
 ├── restraint/            one suite, N cases   — is it left alone when it should be?
 │   ├── prompts.csv
 │   └── checks.toml
-├── correctness/          one suite PER assertion (C1)
-│   ├── <case-id>/prompts.csv
-│   └── <case-id>/checks.toml
+├── correctness/          one suite, N cases   — is the answer right?
+│   ├── prompts.csv
+│   └── checks.toml       one check per case, each scoped with `cases`
 ├── patterns.json         single source of truth for every pattern; guard input
+├── metrics.toml          the metrics of §6, read by `fastskill eval scorecard`
 ├── guard_vacuity.py      fails if any pattern occurs in SKILL.md
-└── run.sh                stages manifests, runs all suites, aggregates
+└── run.sh                stages manifests, runs all suites, folds them into §6
 ```
 
 ### 4.1 Consultation suite
@@ -227,9 +255,9 @@ Metric: **answer accuracy**.
 `off-npm` and `off-pip` are the sharp ones: they are package-manager questions, which is
 the nearest neighbour to fastskill's own domain and the likeliest source of a false trigger.
 
-### Correctness (scenario-unique oracles)
+### Correctness (scenario-unique checks)
 
-| suite id | scenario value | required pattern(s) |
+| case id | scenario value | required pattern(s) |
 |---|---|---|
 | `c-tag-pin` | tag `v2.1.0` | `--tag v2.1.0` |
 | `c-branch-pin` | branch `release-42` | `--branch release-42` |
@@ -250,42 +278,61 @@ occurrence can only be the agent inventing it.
 
 ## 6. Metrics and acceptance thresholds
 
-Reported per agent, five trials per case. Each metric names the exact check it
-aggregates: a consultation trial carries two required checks, and folding them into one
-suite pass-rate would report a tool-budget overrun as a recall failure.
+Reported per agent, five trials per case. Each metric names the exact check type it
+folds: a consultation trial carries two required checks, and folding them into one
+suite pass-rate would report a tool-budget overrun as a recall failure. The metrics are
+declared in `evals/v2/metrics.toml` and applied by `fastskill eval scorecard`, which
+selects cases by id pattern rather than by suite directory.
 
 | Metric | Checks aggregated | Gate | Baseline (pi / glm-5.3) |
 |---|---|---|---|
-| Skill-open rate | consultation `trigger_expectation` | ≥ 0.85 | **100.0%** (106/106) |
-| Restraint rate | restraint `trigger_expectation` | ≥ 0.90 | **100.0%** (40/40) |
-| Answer accuracy | correctness `command_contains` + `trigger_expectation` | ≥ 0.80 | **96.7%** (58/60) |
-| Tool-budget compliance | consultation `max_tool_calls` | ≥ 0.90 | **92.5%** (98/106) |
-| Efficiency | p95 tool calls per consultation trial | ≤ 25 | **30** (median 8, max 50) |
+| Skill-open rate | `op-*` `skill_invoked` | ≥ 0.85 | **100.0%** (106/106) |
+| Restraint rate | `off-*` `skill_invoked` | ≥ 0.90 | **100.0%** (40/40) |
+| Answer accuracy | `c-*` `command_contains` + `trigger_expectation` | ≥ 0.80 | **96.7%** (58/60) |
+| Tool-budget compliance | `op-*` `max_tool_calls` | ≥ 0.90 | **92.5%** (98/106) |
+| Efficiency | p95 tool calls per `op-*` trial | ≤ 25 | **30** (median 8, max 50) |
 | Cost | USD per full sweep | reported, not gated | **$5.81** / 210 trials |
 
-Baseline measured 2026-09-01, 42 cases x 5 trials, commit `a10df77`.
+Baseline measured 2026-09-01, 42 cases x 5 trials, commit `a10df77`. Its skill-open and
+restraint figures were measured by the text check that `skill_invoked` replaced.
+
+Two further check results the sweep now produces — skill invocation and tool budget on
+the correctness prompts — are claimed by `metrics.toml` at `min_rate = 0.0`, reported
+without a gate. There is no baseline to set a real bar from, and inventing one would make
+an unmeasured threshold look like an agreed one.
 
 Thresholds were proposals to be ratified against the first baseline, not asserted in
 advance. Gating before a baseline exists is how a suite gets disabled. Ratified: the four
 rate gates hold and stay as written. The efficiency gate does **not** hold and is
 deliberately left at 25 — see §7.6.
 
-### 6.1 Dead trials are excluded from every rate
+### 6.1 Trials with outcome `error` are excluded from every rate
 
 A provider timeout or connection error yields a trial with a complete-looking artifact
-set and zero model output. Such a trial **passes every negative oracle**, because an
-absent pattern is absent: an outage would score as perfect restraint and perfect
-tool-budget compliance. `aggregate.py` therefore classifies a trial as dead when its
-trace carries no assistant message text, excludes it from all rates, and reports the
-count separately.
+set and zero model output. Such a trial **passes every negative expectation**, because an
+absent pattern is absent, and every tool-call ceiling, because zero is under every limit:
+an outage would score as perfect restraint and perfect tool-budget compliance, while the
+same outage on a positive suite scores as total failure. The direction of the lie is set
+by the polarity of the check, so no single default is safe.
 
-The discriminator is assistant text, not tool calls. A restraint trial correctly makes
-zero tool calls and still answers at length; an earlier draft keyed on tool calls and
-misclassified 32 healthy restraint trials as dead.
+The engine gives such a trial the outcome `error` and excludes it from every rate,
+recording the count on the case rather than dropping it. A case whose every trial errored
+takes the verdict `error` and makes `eval score` exit non-zero naming it, because silent
+exclusion moves the same hazard up one level.
 
-In the baseline sweep exactly 4 of 210 trials were dead, all on `op-list`, all
+The discriminator is transport and terminal signal — a non-zero exit, a timeout, the
+agent's own terminal event reporting failure, or a stream that ended with no terminal
+event on a backend that declares it emits one. It is **not** the absence of assistant
+text: an agent that exits cleanly having answered with nothing is a real skill failure and
+scores as one. An earlier draft keyed on tool calls instead and misclassified 32 healthy
+restraint trials, which correctly make zero tool calls and still answer at length.
+
+In the baseline sweep exactly 4 of 210 trials errored, all on `op-list`, all
 `Request timed out.` after three provider retries — and they were precisely the four
-trials that made the raw skill-open rate read 96.4% instead of 100%.
+trials that made the raw skill-open rate read 96.4% instead of 100%. They were caught then
+by a text heuristic in a post-processor, which was a workaround for evidence the engine
+was discarding: the agent's stdout carried `"stopReason":"error"` sixteen times and trace
+normalization kept none of it.
 
 ## 7. Known limitations, stated so they are not mistaken for rigour
 
@@ -311,27 +358,30 @@ trials that made the raw skill-open rate read 96.4% instead of 100%.
    skill costs an agent ~30 tool calls to answer a browse-shaped question, and that is a
    finding about the skill, not about the threshold. Whoever narrows those four cases
    should re-measure rather than re-tune.
-7. **A dead trial is invisible in `summary.json`.** The engine records it as an ordinary
-   failed (or passed) trial. Only the trace distinguishes it, which is why §6.1 exists.
-   The eval cannot tell a provider outage from a model refusal without reading traces.
+7. **A trial that produced no measurement used to be invisible in `summary.json`.** The
+   engine recorded it as an ordinary failed or passed trial, so only the trace
+   distinguished it — which is why §6.1 exists and why the first read of it was a text
+   heuristic. The engine now decodes each backend's terminal event, records the outcome,
+   exit code and cost on the trial, and gives it the outcome `error`. A provider outage
+   and a model refusal are now distinguishable without reading traces.
 
 ## 8. Execution plan
 
-1. Generate the suites: `python3 evals/v2/build.py`. **Done** — 14 suites.
+1. Generate the suites: `python3 evals/v2/build.py`. **Done** — 14 suites at the time,
+   3 since per-case checks landed.
 2. Guard against vacuity: `python3 evals/v2/guard_vacuity.py`. **Done** — hard
    precondition of every run; it caught three patterns (`--enable-write`, `--local`,
    `--scope project`) whose literal text appears in `SKILL.md` and which therefore could
    never have failed. They were dropped.
-3. Negative-control the oracles: `evals/v2/negctl.sh <run-dir>`. **Done** — on real
-   `pi` artifacts, deleting the single trace line that carries the skill read flips
-   `trigger_expectation` from 5/5 to 0/5 while `max_tool_calls` stays true, so the flip
-   is attributable to the consultation check alone.
-4. Self-test the aggregator: `python3 evals/v2/test_aggregate.py`. **Done** — 21
-   assertions against hand-computed answers on a synthetic sweep.
-5. Run the sweep: `evals/v2/run.sh pi ./eval-runs/v2 5`. **Done** — 2026-09-01,
+3. Negative-control the consultation check: `evals/v2/negctl.sh <run-dir>`. **Done** — on
+   real `pi` artifacts, deleting the single trace line that carries the skill read flips
+   the check from 5/5 to 0/5 while `max_tool_calls` stays true, so the flip is
+   attributable to the consultation check alone.
+4. Run the sweep: `evals/v2/run.sh pi ./eval-runs/v2 5`. **Done** — 2026-09-01,
    210 trials, $5.81, 59 min wall clock (consultation is ~50 min of it).
-6. Aggregate: `python3 evals/v2/aggregate.py ./eval-runs/v2`. **Done** — §6.
-7. Ratify the thresholds against the baseline. **Done** — §6, §7.6.
+5. Fold the runs into the metrics. **Done** — §6. `run.sh` now ends with
+   `fastskill eval scorecard`, so this is no longer a separate step.
+6. Ratify the thresholds against the baseline. **Done** — §6, §7.6.
 
 The baseline report is committed at `evals/v2/baseline/pi-glm-5.3-2026-09-01.txt`.
 
@@ -343,7 +393,7 @@ The baseline report is committed at `evals/v2/baseline/pi-glm-5.3-2026-09-01.txt
    the only genuine wrong-answer in the sweep, and it is a hallucinated command, not a
    wrong flag — the worst failure shape, because it is copy-pasteable. The skill has no
    text telling an agent that publishing is unsupported.
-2. **Recall is not the problem; tool budget is.** Every non-dead consultation trial
+2. **Recall is not the problem; tool budget is.** Every scored consultation trial
    opened the skill. Eight trials across four cases blew the 25-call budget, all on
    browse-shaped questions. See §7.6.
 3. **Restraint is unambiguous.** 40/40, and the off-topic answers are real answers —

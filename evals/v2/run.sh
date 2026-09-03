@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run every spec-001 suite against one agent and collect the artifacts.
+# Run every spec-001 suite against one agent, then fold the runs into the metrics.
 #
 # `eval run` has no flag to override the suite paths (spec 001 C5) — they come from
 # [tool.fastskill.eval] in the manifest. So each suite gets a throwaway skill tree staged
@@ -25,14 +25,11 @@ echo "=== vacuity guard ==="
 python3 "$HERE/guard_vacuity.py"
 echo
 
-suites=(consultation restraint)
-while IFS= read -r d; do suites+=("correctness/$(basename "$d")"); done \
-  < <(find "$HERE/correctness" -mindepth 1 -maxdepth 1 -type d | sort)
+suites=(consultation restraint correctness)
 
 echo "=== running ${#suites[@]} suite(s) against '$AGENT', $TRIALS trial(s) per case ==="
 for suite in "${suites[@]}"; do
-  slug="${suite//\//-}"
-  work="$STAGE/$slug"
+  work="$STAGE/$suite"
   rm -rf "$work"
   mkdir -p "$work/evals"
 
@@ -42,7 +39,7 @@ for suite in "${suites[@]}"; do
   # Rebuild the manifest's eval section; keep everything above it byte-identical so the
   # staged skill is the shipped skill.
   python3 - "$SKILL_SRC/skill-project.toml" "$work/fastskill/skill-project.toml" "$TRIALS" <<'PY'
-import re, sys
+import sys
 src, dst, trials = sys.argv[1], sys.argv[2], int(sys.argv[3])
 text = open(src, encoding="utf-8").read()
 head = text.split("[tool.fastskill.eval]")[0].rstrip() + "\n"
@@ -59,17 +56,21 @@ open(dst, "w", encoding="utf-8").write(
 )
 PY
 
-  printf '  %-34s ' "$suite"
+  printf '  %-14s ' "$suite"
   # --no-fail: this is a measurement, not a gate (spec 001 P6). A failing case is data.
+  # The gates live in metrics.toml and are applied once, below, over all three runs.
   if (cd "$work/fastskill" && fastskill eval run \
         --agent "$AGENT" \
-        --output-dir "$OUT/$slug" \
-        --no-fail >"$OUT/$slug.log" 2>&1); then
-    tail -3 "$OUT/$slug.log" | grep -oE '[0-9]+/[0-9]+ passed' | tail -1 || echo "done"
+        --output-dir "$OUT/$suite" \
+        --no-fail >"$OUT/$suite.log" 2>&1); then
+    tail -3 "$OUT/$suite.log" | grep -oE '[0-9]+/[0-9]+ passed' | tail -1 || echo "done"
   else
-    echo "RUNNER ERROR (see $OUT/$slug.log)"
+    echo "RUNNER ERROR (see $OUT/$suite.log)"
   fi
 done
 
 echo
-echo "artifacts: $OUT"
+echo "=== scorecard ==="
+# Exit status is the scorecard's: a gate below its bar, or a metric that matched no case,
+# fails this script. That is the one place the sweep is allowed to have an opinion.
+fastskill eval scorecard --root "$OUT" --metrics "$HERE/metrics.toml"

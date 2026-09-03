@@ -1,2 +1,0 @@
-id,prompt,should_trigger,tags,workspace_subdir
-c-repos-priority,Register an HTTP registry named acme-reg at https://reg.acme.io/index and give it priority 7. Give me the exact command.,true,correctness,

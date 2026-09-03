@@ -67,7 +67,7 @@ Optional columns: `tags`, `workspace_subdir`.
 
 - **`id`**: non-empty identifier per row (used for `--case`, artifact folder names, and reports).
 - **`prompt`**: text sent to the agent; use CSV quoting for commas or newlines (`"..."`, escaped `""` inside quotes).
-- **`should_trigger`**: `true` / `false` / `1` / other (treated false). Documented intent only; **pass/fail is not driven by this column**. When no checks file is configured, a case **passes** if the agent exits with code `0`, **fails** otherwise. When checks are loaded, a case **passes** only if **every** check passes (see below).
+- **`should_trigger`**: `true` / `false` / `1` / other (treated false). **Scored.** The column generates a `skill_invoked` check on the case with matching polarity, so `false` asserts the skill was *not* consulted rather than asserting nothing. An explicit `skill_invoked` scoped to the case overrides the generated one; a check that contradicts the column is rejected at validation rather than silently resolved. When no checks file is configured the generated check is still the case's score. When checks are loaded, a case **passes** only if **every** required check passes, generated one included (see below).
 - **`tags`**: comma-separated tags inside the cell (e.g. `smoke,basic`). Used with `eval run --tag <name>`.
 - **`workspace_subdir`**: relative path that becomes the agent's working directory for the case. Under the default isolation it is created **inside the case's scratch workspace**, with fixture files copied in from the same path under the project root; under `--no-isolation` it resolves directly under the project root. If empty or column omitted, cwd is the workspace root (or the project root under `--no-isolation`).
 
@@ -85,9 +85,25 @@ Empty lines are skipped.
 
 Point `checks` in TOML at a file containing one or more `[[check]]` tables. Each check must include **`name`**, selecting the check type. Optional **`required`** (boolean, default `true`) is honoured on all types: a case passes when every **required** check passes; a `required = false` check still runs and is reported in `check_results`, but cannot fail the case.
 
+Optional **`cases`** (list of case ids) is also honoured on all types. Absent — the default — the check applies to every case in the suite, so a file written before the selector existed behaves unchanged. Present, it runs only on the ids it names, which is how one suite gives its cases different assertions instead of needing one suite per assertion.
+
+```toml
+[[check]]
+name = "command_contains"
+pattern = "--dry-run"
+cases = ["preview-1", "preview-2"]
+```
+
 ### `skill_invoked`
 
-The check you almost certainly want for "did my skill fire?". Matches a **structured `Skill` tool invocation** in the trace, not a substring of prose. When `skill` is given, it must **exactly equal** the invocation's skill-identifying input field (`skill`, `name`, or `skillName`) — `"foo"` does not match a `"foo-bar"` invocation, and a skill name merely mentioned in argument text does not count. Omit `skill` to match any skill invocation. With `expected = false` this is the only reliable way to assert non-triggering.
+The check you almost certainly want for "did my skill fire?". Two shapes count, because only one backend has a typed skill tool:
+
+1. A **structured `Skill` tool invocation** in the trace, which is Claude Code only. When `skill` is given, it must **exactly equal** the invocation's skill-identifying input field (`skill`, `name`, or `skillName`) — `"foo"` does not match a `"foo-bar"` invocation, and a skill name merely mentioned in argument text does not count. Omit `skill` to match any skill invocation.
+2. **Any** tool use whose input references the skill document's **path**. On `pi` a skill read arrives as `read_file` with the path in its arguments; on `codex` every call is `shell` or `file_change`. The path comes from where the runner staged the skill, so no configuration is needed; set `path` to override it.
+
+Either way it reads the trace only, never the agent's environment. With `expected = false` this is the only reliable way to assert non-triggering.
+
+Backends whose decoder emits no tool-use frames (`gemini`, `opencode`, `cursor`) cannot produce this evidence at all. A **required** `skill_invoked` on one of them makes `eval validate` and `eval run` refuse the suite up front rather than spend tokens on trials that could not be scored; mark it `required = false` to record it as unobserved instead.
 
 ```toml
 [[check]]

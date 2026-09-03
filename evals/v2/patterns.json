@@ -1,6 +1,5 @@
 {
-  "_comment": "Single source of truth for spec 001. Every pattern here is checked against SKILL.md by guard_vacuity.py; a pattern that occurs in the skill document is an oracle that cannot fail (spec 001 C4) and fails the guard.",
-  "consultation_pattern": "skills/fastskill/SKILL.md",
+  "_comment": "Single source of truth for spec 001. Every pattern here is checked against the skill payload by guard_vacuity.py; a pattern that occurs in the payload would match on a mere read, so the check could never fail (spec 001 C4) and the guard rejects it.",
   "max_tool_calls": 25,
   "consultation": [
     [
