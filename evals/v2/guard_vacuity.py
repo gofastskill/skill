@@ -1,14 +1,18 @@
 #!/usr/bin/env python3
-"""Fail the build if any eval pattern is an oracle that cannot fail.
+"""Fail the build if any eval pattern would match without the agent answering.
 
 Spec 001 C4: `trigger_expectation` / `command_contains` substring-match against the whole
 trace, and the trace contains the full text of every file the agent read. The skill payload
 is exactly what an agent reads when it consults the skill, so a pattern occurring anywhere
-in that payload matches whether or not the agent answered correctly.
+in that payload matches whether or not the agent answered correctly. A positive check would
+pass on the read alone; a negative one would fail on it.
 
 This guard proves, mechanically, that no pattern in patterns.json occurs in the shipped
 skill payload. Run it before every sweep. A green guard is what makes the numbers mean
 something.
+
+Only the text patterns need this. Skill invocation is checked structurally, against decoded
+tool-use frames rather than trace text (R8), so no string in the payload can satisfy it.
 """
 import json
 import pathlib
@@ -36,7 +40,6 @@ def main():
         return 1
 
     checked = []
-    checked.append(("consultation_pattern", patterns["consultation_pattern"]))
     for case in patterns["correctness"]:
         for pat in case.get("require", []):
             checked.append((f"{case['id']}.require", pat))
@@ -63,7 +66,7 @@ def main():
         for owner, pat, relpath in violations:
             print(f"  {owner}: {pat!r} occurs in {relpath}")
         return 1
-    print("PASS: no pattern occurs in the skill payload — every oracle can fail")
+    print("PASS: no pattern occurs in the skill payload — every check can fail")
     return 0
 
 if __name__ == "__main__":

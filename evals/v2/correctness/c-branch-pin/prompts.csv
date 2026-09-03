@@ -1,2 +1,0 @@
-id,prompt,should_trigger,tags,workspace_subdir
-c-branch-pin,Install the skill at https://github.com/acme/widgets.git from its release-42 branch. Give me the exact command.,true,correctness,

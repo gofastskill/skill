@@ -1,2 +1,0 @@
-id,prompt,should_trigger,tags,workspace_subdir
-c-marketplace-baseurl,Build a marketplace catalog from ./team-skills whose download links point at https://cdn.acme.io/skills/. Give me the exact command.,true,correctness,

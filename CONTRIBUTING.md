@@ -76,13 +76,16 @@ docker build -f evals/agent-eval.Dockerfile -t fastskill-evals .
 docker run --rm -e OPENAI_API_KEY="$OPENAI_API_KEY" fastskill-evals codex
 ```
 
-Checks are **global** — every check in `checks.toml` is applied to every case — so v1's cases
-are all positive (`should_trigger = true`). Note that `should_trigger` is documentation only:
-it is parsed into the case and never read by a check, so it asserts nothing by itself. A
-negative expectation has to be written as a check with `expected = false`, and because checks
-are global that means a separate suite — which is how `evals/v2/` expresses per-case
-assertions. See `fastskill/references/eval.md` for the prompts/checks schema and artifact
-layout.
+A check applies to every case in the suite unless it carries a `cases` list naming the ones
+it is for, which is how `evals/v2/correctness/` gives twelve cases twelve different
+assertions in one suite. v1's cases are all positive (`should_trigger = true`) and its two
+checks are unscoped, so they apply to all of them.
+
+`should_trigger` is scored. It generates a `skill_invoked` check on the case with matching
+polarity, so a row marked `false` asserts that the skill was *not* consulted rather than
+asserting nothing. Writing an explicit `skill_invoked` alongside it is allowed and wins, but
+a check that contradicts the column is rejected rather than silently resolved. See
+`fastskill/references/eval.md` for the prompts/checks schema and artifact layout.
 
 ## CI/CD
 

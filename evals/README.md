@@ -41,51 +41,62 @@ fastskill eval run --agent claude --output-dir ../eval-runs
 fastskill eval report --run-dir ../eval-runs/<timestamp>/claude
 ```
 
-`eval score` is not read-only: it backfills `command_count` and the token counts into the
-run's `summary.json` from the trial artifacts. Scoring the committed fixtures therefore
-dirties the tree — restore them with `git show HEAD:<path> > <path>` before committing.
-CI is unaffected; it never commits the checkout.
+`eval score` is read-only. Every number it reports is a function of the run's artifacts,
+and scoring the committed fixtures leaves the tree clean. The backfill of `command_count`
+and the token counts now happens in `eval run`, at write time, where the writer owns the
+artifact it is writing.
 
-v1's `skill_invoked` check needs a structured `Skill` tool-use event in the trace. Only
-Claude Code emits one, so a live v1 run against any other agent fails the suite by
-construction — that is not a regression.
+v1's `skill_invoked` check counts two shapes: a tool use named `Skill`, which only Claude
+Code emits, and any tool use whose input references the skill document's path. A live v1
+run against another agent is therefore scoreable, provided that agent's decoder emits
+tool-use frames at all.
 
 ## Running v2
 
 ```bash
 python3 evals/v2/guard_vacuity.py         # must pass before you trust any number
 ./evals/v2/run.sh pi ./eval-runs/v2 5     # 42 cases x 5 trials, ~1 h, ~$6
-python3 evals/v2/aggregate.py ./eval-runs/v2
 ```
 
 `run.sh` runs the guard itself as a hard precondition, stages a throwaway skill tree and
-manifest per suite, and leaves the repo's own manifest untouched. The suites are generated
-— edit `v2/patterns.json` and re-run `python3 evals/v2/build.py`, never the `checks.toml`
-files.
+manifest per suite, leaves the repo's own manifest untouched, and finishes by folding all
+three runs into the metrics in `v2/metrics.toml`. The suites are generated — edit
+`v2/patterns.json` and re-run `python3 evals/v2/build.py`, never the `checks.toml` files.
 
-Raw artifacts are gitignored (`/eval-runs/`) — only the aggregated result is committed, as
+To re-fold a sweep already on disk without re-running it:
+
+```bash
+fastskill eval scorecard --root ./eval-runs/v2 --metrics evals/v2/metrics.toml
+```
+
+Raw artifacts are gitignored (`/eval-runs/`) — only the folded result is committed, as
 [`v2/baseline/pi-glm-5.3-2026-09-01.txt`](v2/baseline/pi-glm-5.3-2026-09-01.txt).
 Internals and per-suite detail: [`v2/README.md`](v2/README.md). Design rationale:
 [`specs/001-enhanced-eval.md`](../specs/001-enhanced-eval.md).
 
 ## Methodology
 
-### Every oracle must be able to fail
+### Every check must be able to fail
 
 An eval is worthless if its checks pass regardless of what the agent did. Three properties
-of this engine make that easy to get wrong, and all three bit during authoring:
+of this engine made that easy to get wrong, and all three bit during authoring. One is
+inherent and two have since been fixed:
 
 1. **The haystack contains the skill.** Text checks substring-match the whole trace, and
    the trace echoes every file the agent read — `SKILL.md` included. So any pattern that
    appears in the skill document matches the moment the agent opens it, whatever it
    answered. `v2/guard_vacuity.py` scans the skill payload and fails if any pattern occurs
-   there. It caught `--enable-write`, `--local` and `--scope project`.
-2. **Checks are global.** One `checks.toml` applies to every case in a suite; there is no
-   per-case dispatch. Distinct expectations therefore need distinct suites, which is why
-   v2 has one directory per correctness assertion.
-3. **`should_trigger` is not scored.** It is parsed and carried into the case, then never
-   read by any check. A case marked `should_trigger = false` asserts nothing on its own —
-   the negative has to be expressed as a check with `expected = false`.
+   there. It caught `--enable-write`, `--local` and `--scope project`. This one is
+   inherent to text matching and the guard is the answer to it.
+2. **Checks used to be global.** One `checks.toml` applied to every case in a suite, so
+   distinct expectations needed distinct suites — which is why v2 once had one directory
+   per correctness assertion. `[[check]]` entries now take a `cases` list, and the twelve
+   directories collapsed into one suite.
+3. **`should_trigger` used to be unscored.** It was parsed, carried into the case, and read
+   by no check, so a case marked `false` asserted nothing while every reader of the CSV
+   assumed otherwise. It now generates a `skill_invoked` check with matching polarity, and
+   a case whose explicit checks contradict the column is rejected rather than silently
+   resolved.
 
 The consequence for writing a positive check: pair a real flag with a value invented for
 that prompt. `--tag` is vacuous; `--tag v2.1.0` can only come from the agent synthesizing
@@ -97,59 +108,89 @@ A single trial cannot distinguish "reliable" from "got lucky". v2 runs 5 trials 
 and reports passing *trials* over total, so a case that passes 3 of 5 contributes 0.6
 rather than a boolean. Per-case output flags anything between 0 and 5 as flaky.
 
-### Dead trials are excluded
+### Trials with outcome `error` are excluded
 
 A provider timeout produces a trial with a complete-looking artifact set and zero model
-output. Such a trial **passes every negative oracle**, because an absent pattern is
-absent — an outage would score as perfect restraint. `aggregate.py` classifies a trial as
-dead when its trace carries no assistant message text, drops it from every rate, and
-reports the count separately.
+output. Such a trial **passes every negative expectation**, because an absent pattern is
+absent, and passes every tool-call ceiling, because zero is under every limit — so an
+outage scores as perfect restraint and perfect budget compliance. The same outage on a
+positive suite scores as total failure. The direction of the lie is set by the polarity of
+the check, which is why no single default is safe and such a trial must be excluded rather
+than reduced to a pass or averaged in as a wrong answer.
 
-The discriminator is assistant text, not tool calls: a restraint trial correctly makes
-zero tool calls and still answers at length. In the baseline sweep 4 of 210 trials were
-dead, and they were the entire gap between a reported 96.4% and the true 100%.
+The engine decides this on transport and terminal signal, not on the content of the
+output: a non-zero exit, a timeout, the agent's own terminal event reporting failure, or a
+stream that ended with no terminal event on a backend that declares it emits one. An agent
+that exits cleanly having answered with nothing is a **failure**, not an error — that is a
+real skill failure and scores as one.
+
+`pass_rate` is over scored trials, and the excluded count travels on the case rather than
+being dropped. A case whose every trial errored has no scored trials at all: it takes the
+verdict `error`, is left out of the split score, and `eval score` exits non-zero naming
+it, because silent exclusion would move the same hazard up one level.
+
+In the baseline sweep 4 of 210 trials errored, and they were the entire gap between a
+reported 96.4% and the true 100%. They were detected then by a text heuristic in a Python
+post-processor, which was a workaround for evidence the engine was discarding: the agent's
+stdout carried `"stopReason":"error"` sixteen times and trace normalization kept none of
+it. The engine now records it.
 
 ### One metric per check
 
 A consultation trial carries two required checks. Folding them into a single suite
 pass-rate reports a tool-budget overrun as a recall failure, so each metric names the
-exact check it aggregates. `aggregate.py` warns if any observed check is claimed by no
-metric — that guard exists because an earlier version silently measured 1 of 12
-correctness cases.
+exact check type it folds. Metrics are declared in [`v2/metrics.toml`](v2/metrics.toml)
+and applied by `fastskill eval scorecard`, which selects cases by `*`-wildcard id pattern
+rather than by the directory a suite happens to live in.
 
 | Metric | Checks | Gate | Baseline (pi / glm-5.3) |
 |---|---|---|---|
-| Skill-open rate | consultation `trigger_expectation` | ≥ 0.85 | 100.0% (106/106) |
-| Restraint rate | restraint `trigger_expectation` | ≥ 0.90 | 100.0% (40/40) |
-| Answer accuracy | correctness `command_contains` + `trigger_expectation` | ≥ 0.80 | 96.7% (58/60) |
-| Tool-budget compliance | consultation `max_tool_calls` | ≥ 0.90 | 92.5% (98/106) |
-| Efficiency | p95 tool calls per consultation trial | ≤ 25 | 30 (median 8, max 50) |
+| Skill-open rate | `op-*` `skill_invoked` | ≥ 0.85 | 100.0% (106/106) |
+| Restraint rate | `off-*` `skill_invoked` | ≥ 0.90 | 100.0% (40/40) |
+| Answer accuracy | `c-*` `command_contains` + `trigger_expectation` | ≥ 0.80 | 96.7% (58/60) |
+| Tool-budget compliance | `op-*` `max_tool_calls` | ≥ 0.90 | 92.5% (98/106) |
+| Efficiency | p95 tool calls per `op-*` trial | ≤ 25 | 30 (median 8, max 50) |
 | Cost | USD per sweep | not gated | $5.81 / 210 trials |
+
+The baseline predates the collapse to three suites, so its consultation and restraint
+figures were measured by the text check that `skill_invoked` replaced. Two further check
+results the sweep now produces — skill invocation and tool budget on the correctness
+prompts — are claimed by `metrics.toml` at `min_rate = 0.0`, which reports them without
+gating them. There is no baseline to set a real bar from yet, and inventing one would make
+an unmeasured threshold look like an agreed one.
 
 Gates are ratified against the first baseline, not asserted in advance. The efficiency
 gate is deliberately left unmet — retuning a threshold to fit its own observation makes it
 unfalsifiable.
 
+Two guards sit on the metrics themselves. A metric matching no observed check result
+**fails the command**, and `--no-fail` does not suppress it, because a mistyped case
+pattern would otherwise make a gate quietly disappear. And check results that no metric
+claims are named in a warning — that guard exists because an earlier version silently
+measured 1 of 12 correctness cases.
+
 ### Cost is the vendor's number
 
-`aggregate.py` sums `cost.total` from `turn_end` events in the agent's stdout. It does not
-estimate from token counts: `summary.json` records the *last* turn's usage, not the
-trial's total. `pi` also re-emits a cumulative cost block on every streamed event, so
-summing all of them over-counts by roughly 100x.
+Each trial records the cost its backend reported, and the scorecard sums that field.
+Absent it, the trial records nothing and the report reads "not reported". Cost is never
+estimated from a local price table or from token counts: `summary.json` records the *last*
+turn's usage rather than the trial's total, `pi` re-emits a cumulative cost block on every
+streamed event so summing them over-counts by roughly 100x, and a stale estimate is
+indistinguishable from a real number once it reaches a report.
 
 ## Verifying the measurement itself
 
 No agent needed, seconds to run:
 
 ```bash
-python3 evals/v2/guard_vacuity.py                     # no oracle can pass vacuously
-python3 evals/v2/test_aggregate.py                    # metrics match hand-computed answers
+python3 evals/v2/guard_vacuity.py                     # no check can pass on a mere read
 evals/v2/negctl.sh ./eval-runs/v2/consultation/<timestamp>/pi   # needs one real run
 ```
 
 `negctl.sh` is the red-green proof: it copies a real completed case, deletes the trace
-line carrying the skill read from one copy, and re-scores both. The consultation oracle
-must go from pass to fail while `max_tool_calls` stays put.
+line carrying the skill read from one copy, and re-scores both. The consultation check
+must go from pass to fail while `max_tool_calls` stays put. It reads the path to delete
+out of each trial's `result.json`, so it removes the evidence the check actually reads.
 
 ## Adding a case
 

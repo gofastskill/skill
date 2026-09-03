@@ -1,2 +1,0 @@
-id,prompt,should_trigger,tags,workspace_subdir
-c-install-without,Install everything in my manifest except the group named docs. Give me the exact command.,true,correctness,
