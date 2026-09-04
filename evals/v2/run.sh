@@ -20,9 +20,17 @@ OUT="${2:?usage: run.sh <agent> <out-dir> [trials]}"
 TRIALS="${3:-5}"
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Anchor OUT before anything derives from it. Every suite below runs from inside a throwaway
+# skill tree staged elsewhere (stage.sh), so a relative out-dir resolves against *that* tree
+# rather than the caller's cwd: the run lands somewhere unrelated and the log redirect fails
+# outright. Symptom when this is missing -- "<out-dir>/<suite>.log: No such file or directory",
+# one RUNNER ERROR per suite, then EVAL_SCORECARD_NO_RUNS from a scorecard with nothing to read.
+mkdir -p "$OUT"
+OUT="$(cd "$OUT" && pwd)"
 STAGE="$OUT/.stage"
 
-mkdir -p "$OUT" "$STAGE"
+mkdir -p "$STAGE"
 
 # The guard is a precondition, not a formality: without it the numbers are meaningless.
 echo "=== vacuity guard ==="
