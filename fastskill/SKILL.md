@@ -296,17 +296,23 @@ authenticates by a different mechanism, and `auth` is not consulted for them:
 Generate a `marketplace.json` from a folder of skills so others can consume them as a `git-marketplace` repository.
 
 ```bash
-fastskill marketplace create --path ./skills --name "My Marketplace"
-fastskill marketplace create -p . -o .claude-plugin/marketplace.json --name "My Marketplace" --base-url https://example.com/skills/
+fastskill marketplace create ./skills --name "My Marketplace"
+fastskill marketplace create . -o .claude-plugin/marketplace.json --name "My Marketplace" --base-url https://example.com/skills/
 ```
 
-| Option | Description |
+The directory to scan is a **positional argument**, not an option — there is no `--path`.
+
+| Argument / Option | Description |
 |--------|-------------|
-| `-p, --path <DIR>` | Root to scan for skills (default `.`) |
+| `<PATH>` | Positional. Root to scan for skills (default `.`) |
 | `-o, --output <FILE>` | Output path (default `.claude-plugin/marketplace.json`) |
 | `--name <NAME>` | **Required.** Marketplace name |
 | `--base-url <URL>` | Base URL for download links |
-| `--owner-name` / `--owner-email` / `--description` / `--version` | Optional metadata |
+| `--skills-dir <DIR>` | Override the skills directory path |
+| `--owner-name` / `--owner-email` / `--description` / `--repo-version` | Optional metadata |
+
+> The metadata version flag is `--repo-version`. `--version` is the CLI's own version flag:
+> passing it prints the FastSkill version and exits without creating anything.
 
 > **Distribution note:** the `fastskill` CLI does not include `publish`/`auth`/`package` commands. Skill distribution to a hosted registry is handled by the platform operator (a managed deploy workflow), not a self-hosted CLI publish path. Author locally, share via git/zip/marketplace catalogs, or hand artifacts to your registry operator.
 
