@@ -185,6 +185,10 @@ jobs:
           # Must be declared in the Tailscale ACL `tagOwners` and granted access
           # to the gateway. The node is ephemeral and auto-removed.
           tags: tag:ci
+          # Without this the node joins but keeps the runner's resolver, and the
+          # gateway's MagicDNS name does not resolve (curl exit 6). The IP is no
+          # substitute: the Tailscale-issued cert is for the DNS name.
+          args: --accept-dns=true
 
       - name: Install FastSkill CLI
         run: |
@@ -216,10 +220,24 @@ jobs:
           judge_url="$root/v1"
           echo "judge endpoint: $judge_url"
 
-          if ! models="$(curl -fsS --max-time 30 \
-                 -H "Authorization: Bearer $LLM_GATEWAY_KEY" \
-                 "$judge_url/models")"; then
-            echo "::error::no answer from $judge_url/models -- the Tailnet ACL may not grant tag:ci access to the gateway, or the key was rejected."
+          set +e
+          models="$(curl -fsS --max-time 30 \
+            -H "Authorization: Bearer $LLM_GATEWAY_KEY" \
+            "$judge_url/models" 2>"$RUNNER_TEMP/curl.err")"
+          rc=$?
+          set -e
+          if [ "$rc" -ne 0 ]; then
+            # Each branch names one actionable cause. The first version of this
+            # step collapsed them into "ACL or key", and the first real failure
+            # was neither -- it was DNS.
+            case "$rc" in
+              6)     echo "::error::cannot resolve the gateway host. The runner is on the Tailnet but has not applied MagicDNS -- check --accept-dns=true on the tailscale step." ;;
+              7|28)  echo "::error::gateway host resolves but refused or timed out -- the Tailnet ACL most likely does not grant tag:ci access to it." ;;
+              22)    echo "::error::gateway answered with an HTTP error -- the key was most likely rejected." ;;
+              35|60) echo "::error::TLS failure talking to the gateway -- reaching it by IP instead of its MagicDNS name will do this." ;;
+              *)     echo "::error::curl exit $rc talking to the gateway." ;;
+            esac
+            sed 's/^/  curl: /' "$RUNNER_TEMP/curl.err" >&2 || true
             exit 1
           fi
 
