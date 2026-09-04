@@ -27,6 +27,10 @@ on:
         # diagnostic runs of the non-trigger checks.
         options: [claude, codex]
         default: claude
+      trials:
+        description: 'Trials per case (5 is the spec-001 default)'
+        type: string
+        default: '5'
 
 concurrency:
   group: skill-evals-${{ github.ref }}
@@ -110,38 +114,141 @@ jobs:
           echo "FAIL fixture correctly reported a failing suite."
 
   # ----------------------------------------------------------------------------
-  # Opt-in (workflow_dispatch): run the suite against a REAL agent.
-  # Costs LLM tokens and needs API-key secrets, so it never runs on push/PR.
-  # NOTE: aikit supports aikit, claude, codex, cursor, gemini and pi,
-  # but `--agent` only accepts a key whose CLI is installed on the runner --
-  # an uninstalled agent fails with RUNTIME_UNKNOWN_ID, same as a typo. The
-  # choices below are limited to the two this job installs a CLI for.
+  # Opt-in (workflow_dispatch): run the spec-001 v2 sweep against a REAL agent
+  # and a REAL judge. Costs LLM tokens, so it never runs on push/PR.
+  #
+  # Both halves talk to the same platform LiteLLM gateway, which is reachable on
+  # the Tailnet ONLY -- there is no public endpoint, and there is no self-hosted
+  # runner. The runner joins the Tailnet itself as an ephemeral `tag:ci` node,
+  # exactly as goaikit/aikit's nightly-agent-e2e and gofastskill/fastskill's
+  # quality-gateway-smoke do; the node is auto-removed when the job ends.
+  #
+  # The agent uses the gateway's Anthropic-compatible route (host root); the
+  # judge uses the OpenAI-compatible one (`/v1`) on the same host, same key.
+  #
+  # Required repo secrets -- all five, or the job fails (see the guard below):
+  #   TS_OAUTH_CLIENT_ID / TS_OAUTH_SECRET  Tailscale OAuth client, tag:ci
+  #   LLM_GATEWAY_URL                       gateway base URL on the Tailnet
+  #   LLM_GATEWAY_KEY                       LiteLLM virtual key, budget-scoped
+  #   LLM_GATEWAY_MODEL                     model pin, inside the key's allow-list
+  #
+  # NOTE: aikit supports aikit, claude, codex, cursor, gemini and pi, but
+  # `--agent` only accepts a key whose CLI is installed on the runner -- an
+  # uninstalled agent fails with RUNTIME_UNKNOWN_ID, same as a typo. The choices
+  # below are limited to the two this job installs a CLI for.
   # ----------------------------------------------------------------------------
   live-eval:
+    name: Judged sweep (real agent + judge, over the Tailnet)
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    # Three suites x N trials, plus one judge call per correctness trial. This
+    # is a backstop against a wedged agent, not a target.
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      # Required by tailscale/github-action to mint an OIDC token for OAuth.
+      id-token: write
     steps:
+      # This job runs only because a human dispatched it, so an unset secret is
+      # a mistake to report, not a condition to quietly skip past. (aikit and
+      # fastskill skip instead -- theirs are scheduled and must not page.)
+      - name: Verify gateway + Tailscale secrets are configured
+        env:
+          TS_OAUTH_CLIENT_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          TS_OAUTH_SECRET: ${{ secrets.TS_OAUTH_SECRET }}
+          LLM_GATEWAY_URL: ${{ secrets.LLM_GATEWAY_URL }}
+          LLM_GATEWAY_KEY: ${{ secrets.LLM_GATEWAY_KEY }}
+          LLM_GATEWAY_MODEL: ${{ secrets.LLM_GATEWAY_MODEL }}
+        run: |
+          missing=""
+          for v in TS_OAUTH_CLIENT_ID TS_OAUTH_SECRET \
+                   LLM_GATEWAY_URL LLM_GATEWAY_KEY LLM_GATEWAY_MODEL; do
+            [ -z "${!v}" ] && missing="$missing $v"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::live-eval was dispatched, but these secrets are unset:$missing"
+            exit 1
+          fi
+          echo "All five secrets are set."
+
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
+
+      - name: Connect to the Tailnet
+        uses: tailscale/github-action@v3
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          # Must be declared in the Tailscale ACL `tagOwners` and granted access
+          # to the gateway. The node is ephemeral and auto-removed.
+          tags: tag:ci
+
       - name: Install FastSkill CLI
         run: |
           curl -fsSL https://raw.githubusercontent.com/gofastskill/fastskill/main/scripts/install.sh | bash
           fastskill --version
+
       - name: Install agent CLI (${{ inputs.agent }})
         run: |
           case "${{ inputs.agent }}" in
             codex)  npm install -g @openai/codex ;;
             claude) npm install -g @anthropic-ai/claude-code ;;
           esac
-      - name: Run live evals
+
+      # run.sh already refuses to start a sweep it cannot judge, but it only
+      # checks that the variables are SET. Whether the Tailnet grant exists,
+      # whether the key is accepted, and whether the model is inside the key's
+      # allow-list all fail at the first judge call instead -- which happens
+      # after two suites have been paid for in full. Buy that answer up front.
+      - name: Preflight -- gateway reachable, key accepted, model served
         env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          LLM_GATEWAY_URL: ${{ secrets.LLM_GATEWAY_URL }}
+          LLM_GATEWAY_KEY: ${{ secrets.LLM_GATEWAY_KEY }}
+          LLM_GATEWAY_MODEL: ${{ secrets.LLM_GATEWAY_MODEL }}
         run: |
-          cd fastskill
-          fastskill eval run --agent "${{ inputs.agent }}" --output-dir ../eval-runs
+          # One canonical root, both routes derived from it: the secret may or may
+          # not already carry a trailing slash or /v1, and guessing wrong sends
+          # the agent to /v1/v1/messages.
+          root="${LLM_GATEWAY_URL%/}"; root="${root%/v1}"
+          judge_url="$root/v1"
+          echo "judge endpoint: $judge_url"
+
+          if ! models="$(curl -fsS --max-time 30 \
+                 -H "Authorization: Bearer $LLM_GATEWAY_KEY" \
+                 "$judge_url/models")"; then
+            echo "::error::no answer from $judge_url/models -- the Tailnet ACL may not grant tag:ci access to the gateway, or the key was rejected."
+            exit 1
+          fi
+
+          if ! echo "$models" | jq -e --arg m "$LLM_GATEWAY_MODEL" \
+                 'any(.data[]?.id; . == $m)' >/dev/null; then
+            echo "::error::LLM_GATEWAY_MODEL is not served by this key. A virtual key is scoped to a model allow-list; this key serves:"
+            echo "$models" | jq -r '.data[]?.id' | sed 's/^/  - /'
+            exit 1
+          fi
+          echo "gateway answered and the pinned model is inside the key's allow-list."
+
+      - name: Run the judged sweep
+        env:
+          # The agent's half. LiteLLM serves the Anthropic-compatible route at
+          # the host root; the client appends /v1/messages itself, so
+          # ANTHROPIC_BASE_URL is derived from the root below, not passed here.
+          ANTHROPIC_AUTH_TOKEN: ${{ secrets.LLM_GATEWAY_KEY }}
+          ANTHROPIC_MODEL: ${{ secrets.LLM_GATEWAY_MODEL }}
+          # The judge's half: same gateway, same key, OpenAI-compatible route.
+          # JUDGE_MODEL overrides the placeholder each checks.toml declares.
+          LLM_GATEWAY_URL: ${{ secrets.LLM_GATEWAY_URL }}
+          JUDGE_API_KEY: ${{ secrets.LLM_GATEWAY_KEY }}
+          JUDGE_MODEL: ${{ secrets.LLM_GATEWAY_MODEL }}
+        run: |
+          root="${LLM_GATEWAY_URL%/}"; root="${root%/v1}"
+          export ANTHROPIC_BASE_URL="$root"
+          export AIKIT_LLM_URL="$root/v1"
+          ./evals/v2/run.sh "${{ inputs.agent }}" ./eval-runs/v2 "${{ inputs.trials }}"
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
