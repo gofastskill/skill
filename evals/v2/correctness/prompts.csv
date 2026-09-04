@@ -1,13 +1,13 @@
-id,prompt,should_trigger,tags,workspace_subdir
-c-tag-pin,"Install the skill at https://github.com/acme/widgets.git, pinned to the release tagged v2.1.0. Give me the exact command.",true,correctness,
-c-branch-pin,Install the skill at https://github.com/acme/widgets.git from its release-42 branch. Give me the exact command.,true,correctness,
-c-group-add,Add https://github.com/acme/widgets.git to my project but keep it in a dependency group called qa. Give me the exact command.,true,correctness,
-c-install-only,My manifest has several dependency groups. Install only the group named staging. Give me the exact command.,true,correctness,
-c-install-without,Install everything in my manifest except the group named docs. Give me the exact command.,true,correctness,
-c-serve-port,Start the fastskill server on port 9123 and allow state-changing endpoints. Give me the exact command.,true,correctness,
-c-search-limit,Search my installed skills for invoice parsing. I want at most 3 results. Give me the exact command.,true,correctness,
-c-analyze-threshold,Report near-duplicate skills in my collection using a similarity threshold of 0.97. Give me the exact command.,true,correctness,
-c-marketplace-baseurl,Build a marketplace catalog from ./team-skills whose download links point at https://cdn.acme.io/skills/. Give me the exact command.,true,correctness,
-c-mcp-cursor,"Wire fastskill into Cursor as an MCP server, configured for this project only rather than globally. Give me the exact command.",true,correctness,
-c-repos-priority,Register an HTTP registry named acme-reg at https://reg.acme.io/index and give it priority 7. Give me the exact command.,true,correctness,
-c-no-publish,Publish my finished skill to the public fastskill registry so other people can install it by name.,true,correctness,
+id,prompt,should_trigger,tags,workspace_subdir,expected
+c-tag-pin,"Install the skill at https://github.com/acme/widgets.git, pinned to the release tagged v2.1.0. Give me the exact command.",true,correctness,,fastskill add https://github.com/acme/widgets.git --tag v2.1.0
+c-branch-pin,Install the skill at https://github.com/acme/widgets.git from its release-42 branch. Give me the exact command.,true,correctness,,fastskill add https://github.com/acme/widgets.git --branch release-42
+c-group-add,Add https://github.com/acme/widgets.git to my project but keep it in a dependency group called qa. Give me the exact command.,true,correctness,,fastskill add https://github.com/acme/widgets.git --group qa
+c-install-only,My manifest has several dependency groups. Install only the group named staging. Give me the exact command.,true,correctness,,fastskill install --only staging
+c-install-without,Install everything in my manifest except the group named docs. Give me the exact command.,true,correctness,,fastskill install --without docs
+c-serve-port,Start the fastskill server on port 9123 and allow state-changing endpoints. Give me the exact command.,true,correctness,,fastskill serve --port 9123 --enable-write
+c-search-limit,Search my installed skills for invoice parsing. I want at most 3 results. Give me the exact command.,true,correctness,,"fastskill search ""invoice parsing"" --local --limit 3"
+c-analyze-threshold,Report near-duplicate skills in my collection using a similarity threshold of 0.97. Give me the exact command.,true,correctness,,fastskill analyze duplicates --threshold 0.97
+c-marketplace-baseurl,Build a marketplace catalog from ./team-skills whose download links point at https://cdn.acme.io/skills/. Give me the exact command.,true,correctness,,"fastskill marketplace create ./team-skills --name ""<any name>"" --base-url https://cdn.acme.io/skills/  (the directory is a positional argument; there is no --path flag)"
+c-mcp-cursor,"Wire fastskill into Cursor as an MCP server, configured for this project only rather than globally. Give me the exact command.",true,correctness,,fastskill mcp install --agent cursor --scope project
+c-repos-priority,Register an HTTP registry named acme-reg at https://reg.acme.io/index and give it priority 7. Give me the exact command.,true,correctness,,fastskill repos add acme-reg --repo-type http-registry https://reg.acme.io/index --priority 7
+c-no-publish,Publish my finished skill to the public fastskill registry so other people can install it by name.,true,correctness,,"There is no command. FastSkill ships no publish, auth or package command, so any `fastskill publish ...` is invented. The correct answer says so and points at the distribution paths that exist: git or zip URL, a marketplace catalog built with `fastskill marketplace create`, or handing the artifact to the registry operator."

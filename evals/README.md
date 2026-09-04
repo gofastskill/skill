@@ -8,8 +8,9 @@ Two suites live here. They answer different questions and neither replaces the o
 | Cases | 14, all positive | 42 — 22 consultation, 8 restraint, 12 correctness |
 | Trials per case | 1 | 5 |
 | Agents | `claude` only | any (baselined on `pi`) |
-| Wired into CI | yes — `eval validate` + `eval score` on every PR | no, runs on demand |
-| Cost per run | $0 (deterministic jobs) | ~$6, ~1 h |
+| Judged by an LLM | no | one advisory judge, on correctness |
+| Wired into CI | yes — `eval validate` + `eval score` on every PR | the suites are validated on every PR; the sweep runs on demand |
+| Cost per run | $0 (deterministic jobs) | ~$6 for the agent, ~1 h, plus one judge call per correctness trial |
 
 v1 is the smoke test the release pipeline depends on. v2 is the measurement. Run v1 before
 every PR — CI does it for you. Run v2 when you change `SKILL.md` in a way that could move
@@ -22,6 +23,8 @@ evals/
 ├── fixtures/{pass,fail}/     # recorded runs, for offline `eval score` in CI
 ├── agent-eval.Dockerfile     # reproducible container for a live v1 run
 └── v2/                       # spec 001 suite — see v2/README.md
+    ├── stage.sh              # one suite → a throwaway skill tree; used by run.sh and CI
+    └── correctness/judge-prompt.md   # the judge's rubric prompt, hand-written
 ```
 
 ## Running v1
@@ -55,13 +58,23 @@ tool-use frames at all.
 
 ```bash
 python3 evals/v2/guard_vacuity.py         # must pass before you trust any number
-./evals/v2/run.sh pi ./eval-runs/v2 5     # 42 cases x 5 trials, ~1 h, ~$6
+
+export AIKIT_LLM_URL=https://…/v1         # the judge's endpoint — there is no default
+export JUDGE_API_KEY=…                    # its key, named by api_key_env in checks.toml
+export JUDGE_MODEL=glm-5.3                # optional; overrides the model checks.toml declares
+./evals/v2/run.sh pi ./eval-runs/v2 5     # 42 cases x 5 trials, ~1 h, ~$6 + the judge's calls
 ```
 
 `run.sh` runs the guard itself as a hard precondition, stages a throwaway skill tree and
-manifest per suite, leaves the repo's own manifest untouched, and finishes by folding all
-three runs into the metrics in `v2/metrics.toml`. The suites are generated — edit
-`v2/patterns.json` and re-run `python3 evals/v2/build.py`, never the `checks.toml` files.
+manifest per suite via `v2/stage.sh`, leaves the repo's own manifest untouched, and finishes
+by folding all three runs into the metrics in `v2/metrics.toml`. The suites are generated —
+edit `v2/patterns.json` and re-run `python3 evals/v2/build.py`, never the `checks.toml`
+files. The one exception is `v2/correctness/judge-prompt.md`, which is prose and is written
+by hand.
+
+The correctness suite declares a judge, so it runs with `--judge` and needs the two variables
+above. `run.sh` checks for them before the first suite starts: correctness runs last, and a
+key missing at its turn would surface only after the other two had been paid for in full.
 
 To re-fold a sweep already on disk without re-running it:
 
@@ -101,6 +114,29 @@ inherent and two have since been fixed:
 The consequence for writing a positive check: pair a real flag with a value invented for
 that prompt. `--tag` is vacuous; `--tag v2.1.0` can only come from the agent synthesizing
 an answer.
+
+### A substring check cannot see the command around it
+
+`command_contains` matches the substring it was given and nothing around it. The correctness
+case for `marketplace create` requires `--base-url https://cdn.acme.io/skills/`, and this
+answer contains it:
+
+```
+fastskill marketplace create --path ./team-skills --base-url https://cdn.acme.io/skills/
+```
+
+That command does not run: `--path` is not a fastskill argument, the directory is positional,
+and the binary rejects the invocation before doing anything. The check passes regardless.
+
+The correctness suite therefore also carries one LLM judge, `command-correctness`, which
+scores each answer against a reference answer in the `expected` column of `prompts.csv`. Its
+`would_run` criterion asks exactly the question the substring cannot. The judge is advisory —
+it declares no `min_score`, so it moves no verdict, and its two metrics report at
+`min_rate`/`min_score` `0.0`. See [`v2/README.md`](v2/README.md#the-judge).
+
+The reference answer reaches the judge and nothing else. The runner sends the agent
+`case.prompt` alone, so an `expected` column cannot leak the answer into the trace it is
+being used to grade.
 
 ### Rates over trials, not cases
 
@@ -151,9 +187,13 @@ rather than by the directory a suite happens to live in.
 | Tool-budget compliance | `op-*` `max_tool_calls` | ≥ 0.90 | 92.5% (98/106) |
 | Efficiency | p95 tool calls per `op-*` trial | ≤ 25 | 30 (median 8, max 50) |
 | Cost | USD per sweep | not gated | $5.81 / 210 trials |
+| Command-correctness judgment | judge `overall` over `c-*` | not gated | not yet measured |
+| Command would run as written | judge `would_run` over `c-*` | not gated | not yet measured |
 
 The baseline predates the collapse to three suites, so its consultation and restraint
-figures were measured by the text check that `skill_invoked` replaced. Two further check
+figures were measured by the text check that `skill_invoked` replaced. It also predates the
+judge, which is why the two judgment rows have no figure: no sweep has been run with
+`--judge` yet, and a scorecard cannot be back-filled with judgments the run never made. Two further check
 results the sweep now produces — skill invocation and tool budget on the correctness
 prompts — are claimed by `metrics.toml` at `min_rate = 0.0`, which reports them without
 gating them. There is no baseline to set a real bar from yet, and inventing one would make
@@ -200,15 +240,26 @@ check applies to it. Keep the suite small: it runs on the release path.
 **To v2** — edit `v2/patterns.json`, then `python3 evals/v2/build.py` and
 `python3 evals/v2/guard_vacuity.py`. A correctness pattern that the guard rejects is
 telling you the phrase already appears in `SKILL.md`, so matching it would prove nothing;
-pick a value the agent has to synthesize instead.
+pick a value the agent has to synthesize instead. A correctness case also needs an
+`expected` field — one correct response, written the way you would answer the prompt — which
+becomes the `expected` column and the judge's reference. The guard does not scan it: it is
+never matched against a trace.
 
 ## CI
 
 `.github/workflows/skill-evals.yml`:
 
 - **validate** and **score-fixtures** — required checks, every PR, deterministic, no tokens.
+  Both are v1: `validate` reads the manifest's own eval section, which names nothing under
+  `evals/v2`.
+- **validate-v2** — every PR, deterministic, no tokens. Regenerates the suites and fails if
+  they differ from what is committed, runs the vacuity guard, then stages each suite through
+  `v2/stage.sh` and runs `eval validate` on it. That last step is what checks the judge:
+  `eval validate` parses the judge and its prompt without calling anything. Advisory, not a
+  required check — requiring one is a repository setting, and a required check that has never
+  reported blocks every open pull request.
 - **live-eval** — opt-in via *Run workflow*, v1 only, needs `OPENAI_API_KEY` /
   `ANTHROPIC_API_KEY`.
 
-Nothing in CI runs v2. At ~$6 and ~1 h a sweep it belongs on a schedule or a manual
-trigger, not on a pull request, and no job enforces the gates above yet.
+No CI job runs a v2 *sweep*. At ~$6 and ~1 h it belongs on a schedule or a manual trigger,
+not on a pull request, and no job enforces the gates above yet.

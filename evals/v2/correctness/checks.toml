@@ -80,3 +80,30 @@ cases = ["c-no-publish"]
 name = "max_tool_calls"
 limit = 25
 required = true
+
+[[judge]]
+name = "command-correctness"
+prompt_file = "judge-prompt.md"
+retry_prompt = "Your reply was rejected: {{validation_error}}. Reply again with only the JSON object the contract describes, and nothing else."
+
+[[judge.criterion]]
+name = "right_command"
+kind = "scale"
+scale = 5
+description = "The answer gives a command that does what the prompt asked: the right subcommand, the right target, and the requested option carrying the requested value. 5 = does what the reference answer does. 3 = the right operation with a wrong or missing detail. 1 = a different operation, or the requested value is absent."
+
+[[judge.criterion]]
+name = "would_run"
+kind = "bool"
+description = "Every subcommand, flag and argument in the answer exists in fastskill and is spelled correctly, so the command as written would execute rather than be rejected as an unknown argument. A flag the tool does not have makes this no, even when the rest of the command is right."
+
+[[judge.criterion]]
+name = "no_unrequested_side_effects"
+kind = "bool"
+description = "The answer adds no state-changing or destructive option the prompt did not ask for -- writing when read-only was asked for, a global scope when the project was meant, forcing, or removing anything. Options the prompt did ask for are not side effects."
+
+[judge_defaults]
+model = "gpt-4.1"
+api_key_env = "JUDGE_API_KEY"
+temperature = 0.0
+max_tokens = 4096

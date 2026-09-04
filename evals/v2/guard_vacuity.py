@@ -13,6 +13,11 @@ something.
 
 Only the text patterns need this. Skill invocation is checked structurally, against decoded
 tool-use frames rather than trace text (R8), so no string in the payload can satisfy it.
+
+The `expected` column is deliberately out of scope. It is a reference answer for the judge,
+never matched against a trace and never sent to the agent, so it cannot be satisfied by a
+read the way a substring pattern can. Scanning it here would report the skill's own
+documented commands as vacuous and say nothing true.
 """
 import json
 import pathlib

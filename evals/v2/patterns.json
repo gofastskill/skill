@@ -1,5 +1,5 @@
 {
-  "_comment": "Single source of truth for spec 001. Every pattern here is checked against the skill payload by guard_vacuity.py; a pattern that occurs in the payload would match on a mere read, so the check could never fail (spec 001 C4) and the guard rejects it.",
+  "_comment": "Single source of truth for spec 001. Every pattern here is checked against the skill payload by guard_vacuity.py; a pattern that occurs in the payload would match on a mere read, so the check could never fail (spec 001 C4) and the guard rejects it. `expected` is the reference answer for the correctness judge and is deliberately outside that rule: it is never matched against a trace, and never reaches the agent under test — the runner sends `prompt` and nothing else. It is rendered into the judge prompt as {{case.expected}} via the CSV column build.py emits.",
   "max_tool_calls": 25,
   "consultation": [
     [
@@ -159,6 +159,7 @@
     {
       "id": "c-tag-pin",
       "prompt": "Install the skill at https://github.com/acme/widgets.git, pinned to the release tagged v2.1.0. Give me the exact command.",
+      "expected": "fastskill add https://github.com/acme/widgets.git --tag v2.1.0",
       "require": [
         "--tag v2.1.0"
       ]
@@ -166,6 +167,7 @@
     {
       "id": "c-branch-pin",
       "prompt": "Install the skill at https://github.com/acme/widgets.git from its release-42 branch. Give me the exact command.",
+      "expected": "fastskill add https://github.com/acme/widgets.git --branch release-42",
       "require": [
         "--branch release-42"
       ]
@@ -173,6 +175,7 @@
     {
       "id": "c-group-add",
       "prompt": "Add https://github.com/acme/widgets.git to my project but keep it in a dependency group called qa. Give me the exact command.",
+      "expected": "fastskill add https://github.com/acme/widgets.git --group qa",
       "require": [
         "--group qa"
       ]
@@ -180,6 +183,7 @@
     {
       "id": "c-install-only",
       "prompt": "My manifest has several dependency groups. Install only the group named staging. Give me the exact command.",
+      "expected": "fastskill install --only staging",
       "require": [
         "--only staging"
       ]
@@ -187,6 +191,7 @@
     {
       "id": "c-install-without",
       "prompt": "Install everything in my manifest except the group named docs. Give me the exact command.",
+      "expected": "fastskill install --without docs",
       "require": [
         "--without docs"
       ]
@@ -194,6 +199,7 @@
     {
       "id": "c-serve-port",
       "prompt": "Start the fastskill server on port 9123 and allow state-changing endpoints. Give me the exact command.",
+      "expected": "fastskill serve --port 9123 --enable-write",
       "require": [
         "--port 9123"
       ]
@@ -201,6 +207,7 @@
     {
       "id": "c-search-limit",
       "prompt": "Search my installed skills for invoice parsing. I want at most 3 results. Give me the exact command.",
+      "expected": "fastskill search \"invoice parsing\" --local --limit 3",
       "require": [
         "--limit 3"
       ]
@@ -208,6 +215,7 @@
     {
       "id": "c-analyze-threshold",
       "prompt": "Report near-duplicate skills in my collection using a similarity threshold of 0.97. Give me the exact command.",
+      "expected": "fastskill analyze duplicates --threshold 0.97",
       "require": [
         "--threshold 0.97"
       ]
@@ -215,6 +223,7 @@
     {
       "id": "c-marketplace-baseurl",
       "prompt": "Build a marketplace catalog from ./team-skills whose download links point at https://cdn.acme.io/skills/. Give me the exact command.",
+      "expected": "fastskill marketplace create ./team-skills --name \"<any name>\" --base-url https://cdn.acme.io/skills/  (the directory is a positional argument; there is no --path flag)",
       "require": [
         "--base-url https://cdn.acme.io/skills/"
       ]
@@ -222,6 +231,7 @@
     {
       "id": "c-mcp-cursor",
       "prompt": "Wire fastskill into Cursor as an MCP server, configured for this project only rather than globally. Give me the exact command.",
+      "expected": "fastskill mcp install --agent cursor --scope project",
       "require": [
         "--agent cursor"
       ]
@@ -229,6 +239,7 @@
     {
       "id": "c-repos-priority",
       "prompt": "Register an HTTP registry named acme-reg at https://reg.acme.io/index and give it priority 7. Give me the exact command.",
+      "expected": "fastskill repos add acme-reg --repo-type http-registry https://reg.acme.io/index --priority 7",
       "require": [
         "--priority 7"
       ]
@@ -236,10 +247,41 @@
     {
       "id": "c-no-publish",
       "prompt": "Publish my finished skill to the public fastskill registry so other people can install it by name.",
+      "expected": "There is no command. FastSkill ships no publish, auth or package command, so any `fastskill publish ...` is invented. The correct answer says so and points at the distribution paths that exist: git or zip URL, a marketplace catalog built with `fastskill marketplace create`, or handing the artifact to the registry operator.",
       "require": [],
       "forbid": [
         "fastskill publish"
       ]
     }
-  ]
+  ],
+  "judge": {
+    "_comment": "The correctness judge (spec eval-judge R5). Advisory on its first outing: no min_score, so it renders scores and moves no verdict, exactly as the ungated check_rate metrics do. Ratify a gate against the first sweep that carries judgments, never in advance. `base_url` is deliberately absent: it comes from AIKIT_LLM_URL so the committed file names no machine. `model` must exist on whatever that endpoint serves, and must not be the model under test -- `fastskill eval validate --model <target>` warns when it is.",
+    "name": "command-correctness",
+    "prompt_file": "judge-prompt.md",
+    "retry_prompt": "Your reply was rejected: {{validation_error}}. Reply again with only the JSON object the contract describes, and nothing else.",
+    "defaults": {
+      "model": "gpt-4.1",
+      "api_key_env": "JUDGE_API_KEY",
+      "temperature": 0.0,
+      "max_tokens": 4096
+    },
+    "criteria": [
+      {
+        "name": "right_command",
+        "kind": "scale",
+        "scale": 5,
+        "description": "The answer gives a command that does what the prompt asked: the right subcommand, the right target, and the requested option carrying the requested value. 5 = does what the reference answer does. 3 = the right operation with a wrong or missing detail. 1 = a different operation, or the requested value is absent."
+      },
+      {
+        "name": "would_run",
+        "kind": "bool",
+        "description": "Every subcommand, flag and argument in the answer exists in fastskill and is spelled correctly, so the command as written would execute rather than be rejected as an unknown argument. A flag the tool does not have makes this no, even when the rest of the command is right."
+      },
+      {
+        "name": "no_unrequested_side_effects",
+        "kind": "bool",
+        "description": "The answer adds no state-changing or destructive option the prompt did not ask for -- writing when read-only was asked for, a global scope when the project was meant, forcing, or removing anything. Options the prompt did ask for are not side effects."
+      }
+    ]
+  }
 }
