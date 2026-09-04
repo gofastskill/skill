@@ -32,12 +32,27 @@ export JUDGE_MODEL=glm-5.3         # optional; overrides the model checks.toml d
 the judged one, because correctness is last: a key missing at its turn would surface only
 after the other two suites had been paid for in full.
 
-`run.sh` ends by folding every run into the metrics in `metrics.toml`, so there is no
-separate aggregation step. To re-fold an existing sweep without re-running it:
+A full sweep ends by folding every run into the metrics in `metrics.toml`, so there is no
+separate aggregation step to remember. That fold is `scorecard.sh`, and its exit status is
+the sweep's verdict — the one place the measurement is allowed to have an opinion.
+
+Name a suite to run only that one:
 
 ```bash
-fastskill eval scorecard --root ./eval-runs/v2 --metrics evals/v2/metrics.toml
+./evals/v2/run.sh pi ./eval-runs/v2 5 correctness
 ```
+
+A subset does **not** score itself: every metric here is scoped to a case prefix and a
+metric matching nothing is a hard error (`EVAL_SCORECARD_EMPTY_METRIC`), so scoring
+`restraint` alone would fail on the two `judge_score` metrics rather than measure anything.
+CI runs the three suites on parallel runners for the wall clock — 42 cases at `trials=5` is
+~6.3 h sequentially, past GitHub's hard 6 h per-job ceiling — and folds them at the end:
+
+```bash
+./evals/v2/scorecard.sh ./eval-runs/v2
+```
+
+which is also how to re-fold a sweep already on disk without re-running it.
 
 ## Three suites, not fourteen
 
@@ -124,6 +139,7 @@ Three layers, because a broken measurement is worse than no measurement:
 | Script | What it proves | When it runs |
 |---|---|---|
 | `guard_vacuity.py` | no pattern occurs in the skill payload, so no check passes on a mere read | hard precondition of every `run.sh` |
+| `scorecard.sh` | a root missing a suite is named as such, not reported as an empty metric | folding a sweep, in CI and by hand |
 | `negctl.sh` | the consultation check *fails* when the skill read is deleted from a real trace | after a sweep, against real artifacts |
 | `stage.sh` + `eval validate` | every suite parses, and the judge's prompt uses the variables the engine requires | the `validate-v2` CI job, every pull request |
 

@@ -10,7 +10,8 @@ Two suites live here. They answer different questions and neither replaces the o
 | Agents | `claude` only | any (baselined on `pi`) |
 | Judged by an LLM | no | one advisory judge, on correctness |
 | Wired into CI | yes — `eval validate` + `eval score` on every PR | the suites are validated on every PR; the sweep runs on demand |
-| Cost per run | $0 (deterministic jobs) | ~$6 for the agent, ~1 h, plus one judge call per correctness trial |
+| Cost per run | $0 (deterministic jobs) | 42N agent runs + one judge call per correctness trial; free against a self-hosted gateway, metered against a paid API |
+| Wall clock | seconds | 76 min measured at `trials=1`; ~6.3 h at 5 sequentially, ~4.4 h split across three runners |
 
 v1 is the smoke test the release pipeline depends on. v2 is the measurement. Run v1 before
 every PR — CI does it for you. Run v2 when you change `SKILL.md` in a way that could move
@@ -24,6 +25,8 @@ evals/
 ├── agent-eval.Dockerfile     # reproducible container for a live v1 run
 └── v2/                       # spec 001 suite — see v2/README.md
     ├── stage.sh              # one suite → a throwaway skill tree; used by run.sh and CI
+    ├── run.sh                # runs the suites; naming one runs only that one
+    ├── scorecard.sh          # folds suite runs into metrics.toml and applies the gates
     └── correctness/judge-prompt.md   # the judge's rubric prompt, hand-written
 ```
 
@@ -62,12 +65,13 @@ python3 evals/v2/guard_vacuity.py         # must pass before you trust any numbe
 export AIKIT_LLM_URL=https://…/v1         # the judge's endpoint — there is no default
 export JUDGE_API_KEY=…                    # its key, named by api_key_env in checks.toml
 export JUDGE_MODEL=glm-5.3                # optional; overrides the model checks.toml declares
-./evals/v2/run.sh pi ./eval-runs/v2 5     # 42 cases x 5 trials, ~1 h, ~$6 + the judge's calls
+./evals/v2/run.sh pi ./eval-runs/v2 5     # 42 cases x 5 trials, ~6.3 h + one judge call per correctness trial
 ```
 
 `run.sh` runs the guard itself as a hard precondition, stages a throwaway skill tree and
 manifest per suite via `v2/stage.sh`, leaves the repo's own manifest untouched, and finishes
-by folding all three runs into the metrics in `v2/metrics.toml`. The suites are generated —
+by folding all three runs into the metrics in `v2/metrics.toml` — that last step is
+`v2/scorecard.sh`, and its exit status is the sweep's verdict. The suites are generated —
 edit `v2/patterns.json` and re-run `python3 evals/v2/build.py`, never the `checks.toml`
 files. The one exception is `v2/correctness/judge-prompt.md`, which is prose and is written
 by hand.
@@ -76,11 +80,28 @@ The correctness suite declares a judge, so it runs with `--judge` and needs the 
 above. `run.sh` checks for them before the first suite starts: correctness runs last, and a
 key missing at its turn would surface only after the other two had been paid for in full.
 
-To re-fold a sweep already on disk without re-running it:
+### Running one suite at a time
+
+Name a suite and only that suite runs. CI does this to put each on its own runner: the
+sweep is ~6.3 h at `trials=5` on one machine, past GitHub's hard 6 h per-job ceiling.
 
 ```bash
-fastskill eval scorecard --root ./eval-runs/v2 --metrics evals/v2/metrics.toml
+./evals/v2/run.sh pi ./eval-runs/v2 5 consultation
+./evals/v2/run.sh pi ./eval-runs/v2 5 restraint correctness
 ```
+
+A subset run deliberately does **not** score itself. Every metric in `metrics.toml` is
+scoped to a case prefix, and a metric that matches nothing is a hard error, so scoring
+`restraint` alone would fail on the two `judge_score` metrics rather than tell you
+anything. Fold the parts once they are all present:
+
+```bash
+./evals/v2/scorecard.sh ./eval-runs/v2
+```
+
+That is also how to re-fold a sweep already on disk without re-running it. It refuses a
+root missing a suite and names which one, rather than letting the scorecard report an
+empty metric that reads like a `metrics.toml` bug.
 
 Raw artifacts are gitignored (`/eval-runs/`) — only the folded result is committed, as
 [`v2/baseline/pi-glm-5.3-2026-09-01.txt`](v2/baseline/pi-glm-5.3-2026-09-01.txt).
@@ -258,8 +279,13 @@ never matched against a trace.
   `eval validate` parses the judge and its prompt without calling anything. Advisory, not a
   required check — requiring one is a repository setting, and a required check that has never
   reported blocks every open pull request.
-- **live-eval** — opt-in via *Run workflow*, v1 only, needs `OPENAI_API_KEY` /
-  `ANTHROPIC_API_KEY`.
+- **live-eval** — the v2 sweep, over the Tailnet, against a real agent and a real judge.
+  Dispatch-only: nothing schedules it and nothing should, because it runs for hours and a
+  run nobody is waiting on is a run nobody reads. One job per suite, in parallel, each with
+  its own `timeout-minutes` — the sweep is ~6.3 h sequentially at `trials=5`, past GitHub's
+  hard 6 h per-job ceiling, which no `timeout-minutes` can raise.
+- **scorecard** — `needs: live-eval`, downloads the three suites' artifacts, and runs
+  `v2/scorecard.sh` over the reassembled root. This is the job that applies the gates, so
+  it is the job whose red means the skill regressed rather than the harness broke.
 
-No CI job runs a v2 *sweep*. At ~$6 and ~1 h it belongs on a schedule or a manual trigger,
-not on a pull request, and no job enforces the gates above yet.
+A sweep never runs on a pull request. It is a measurement, not a check.
