@@ -51,6 +51,43 @@ jobs:
           fastskill eval validate
 
   # ----------------------------------------------------------------------------
+  # Deterministic, always-on: the spec-001 v2 suites. `validate` above reads the
+  # manifest's own eval section, which is v1 and names nothing under evals/v2 — so
+  # without this job the generated suites, the judge and its prompt are checked by
+  # nothing. Still no agent and no LLM: `eval validate` parses a suite, it does not
+  # run one, and the judge is read rather than called.
+  #
+  # Not a required status check. Adding one is a repository setting, and renaming or
+  # requiring a check is the kind of change that blocks every open pull request until
+  # it reports — so this starts advisory and can be promoted deliberately.
+  # ----------------------------------------------------------------------------
+  validate-v2:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Suites are generated, never hand-edited
+        run: |
+          python3 evals/v2/build.py
+          if ! git diff --quiet -- evals/v2; then
+            echo "::error::evals/v2 does not match patterns.json — run evals/v2/build.py and commit"
+            git diff -- evals/v2
+            exit 1
+          fi
+      - name: Every check can still fail
+        run: python3 evals/v2/guard_vacuity.py
+      - name: Install FastSkill CLI
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/gofastskill/fastskill/main/scripts/install.sh | bash
+          fastskill --version
+      - name: Validate each suite
+        run: |
+          for suite in consultation restraint correctness; do
+            echo "--- $suite"
+            dir="$(evals/v2/stage.sh "$suite" "$RUNNER_TEMP/stage-$suite" 1 | tail -1)"
+            (cd "$dir" && fastskill eval validate)
+          done
+
+  # ----------------------------------------------------------------------------
   # Deterministic, always-on: exercise the checks engine offline via `eval score`
   # against committed run fixtures — one that must PASS and one that must FAIL.
   # Proves checks.toml scores recorded output correctly, with no agent.

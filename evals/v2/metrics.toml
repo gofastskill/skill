@@ -13,6 +13,13 @@
 #   - check results marked not observable on this backend (R9)
 # A metric whose pattern matches nothing fails the command rather than disappearing.
 
+# `suites` names the directories this question is asked over, relative to this file. It is
+# what makes the scorecard's `benchmark.sha256` computable: the hash covers this file plus
+# each suite's checks.toml, prompts.csv and every file a [[judge]] in it references, so two
+# scorecards are comparable only when they answered the same question. Absent, the hash is
+# null and a comparison against a previous run is refused rather than guessed at.
+suites = ["consultation", "restraint", "correctness"]
+
 # ── The four gates of spec 001 section 6 ──────────────────────────────────────
 
 [[metric]]
@@ -72,3 +79,30 @@ kind = "check_rate"
 cases = ["c-*"]
 checks = ["max_tool_calls"]
 min_rate = 0.0
+
+# The correctness suite's judge reads each answer against the reference in the `expected`
+# column and scores it. It is advisory in every sense: the judge declares no `min_score`, so
+# it moves no verdict, and both metrics below carry `min_score = 0.0`, so they report without
+# gating. `judge_score` reads the recorded judgments rather than the flattened check rows,
+# which is why an advisory judge is still measurable here.
+
+[[metric]]
+name = "Command-correctness judgment (ungated)"
+kind = "judge_score"
+cases = ["c-*"]
+judges = ["command-correctness"]
+min_score = 0.0
+
+# `would_run` is broken out on its own because it is the one thing the checks above
+# structurally cannot express. `command_contains` sees the substring it was given and nothing
+# around it: `fastskill marketplace create --path ./team-skills --base-url https://...`
+# contains the required `--base-url ...` and passes, while `--path` is not a fastskill
+# argument and the command would be rejected before it did anything. This criterion asks
+# whether the command as written would run at all.
+[[metric]]
+name = "Command would run as written (ungated)"
+kind = "judge_score"
+cases = ["c-*"]
+judges = ["command-correctness"]
+criterion = "would_run"
+min_score = 0.0
