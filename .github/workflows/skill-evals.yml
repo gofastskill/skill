@@ -130,7 +130,15 @@ jobs:
   #   TS_OAUTH_CLIENT_ID / TS_OAUTH_SECRET  Tailscale OAuth client, tag:ci
   #   LLM_GATEWAY_URL                       gateway base URL on the Tailnet
   #   LLM_GATEWAY_KEY                       LiteLLM virtual key, budget-scoped
-  #   LLM_GATEWAY_MODEL                     model pin, inside the key's allow-list
+  #   LLM_GATEWAY_MODEL                     AGENT model pin. Must be a model that
+  #                                         can serve a Claude-Code-shaped request
+  #                                         (see the agent preflight below).
+  #
+  # Optional:
+  #   JUDGE_MODEL                           judge model pin; falls back to
+  #                                         LLM_GATEWAY_MODEL. The two roles have
+  #                                         different requirements and a single pin
+  #                                         cannot satisfy both -- see the preflight.
   #
   # NOTE: aikit supports aikit, claude, codex, cursor, gemini and pi, but
   # `--agent` only accepts a key whose CLI is installed on the runner -- an
@@ -141,9 +149,12 @@ jobs:
     name: Judged sweep (real agent + judge, over the Tailnet)
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    # Three suites x N trials, plus one judge call per correctness trial. This
-    # is a backstop against a wedged agent, not a target.
-    timeout-minutes: 60
+    # 42 cases across the three suites, so `trials` N means 42N agent runs plus
+    # one judge call per correctness trial. At 60 minutes even trials=1 did not
+    # finish; trials=5 is 210 runs and needs the headroom. This is a backstop
+    # against a wedged agent, not a target -- the preflights below are what catch
+    # a misconfiguration, in seconds rather than by running out the clock.
+    timeout-minutes: 180
     permissions:
       contents: read
       # Required by tailscale/github-action to mint an OIDC token for OAuth.
@@ -262,6 +273,76 @@ jobs:
             exit 1
           fi
           echo "gateway answered and the pinned model is inside the key's allow-list."
+          echo "models this key may use:"
+          echo "$models" | jq -r '.data[]?.id' | sed 's/^/  - /'
+
+      # Being inside the allow-list is NOT the same as being able to serve the
+      # agent. The check above passes on the OpenAI-compatible route; the agent
+      # talks to the Anthropic-compatible one, and a model group can be listed
+      # there and still reject what Claude Code sends. That is exactly what
+      # happened on run 33889659277: LLM_GATEWAY_MODEL pointed at a group backed
+      # by Ollama qwen2.5:7b, every request came back
+      #   500 ... {"error":"\"qwen2.5:7b\" does not support thinking"}
+      # and the CLI's own 10-attempt backoff turned each deterministic failure
+      # into ~4.6 minutes of sleep. 13 cases later the job hit its timeout having
+      # done no work at all. Two probes, a few seconds, and that is a hard error
+      # in the right place with the right message.
+      - name: Preflight -- the AGENT route can serve the pinned model
+        if: inputs.agent == 'claude'
+        env:
+          LLM_GATEWAY_URL: ${{ secrets.LLM_GATEWAY_URL }}
+          LLM_GATEWAY_KEY: ${{ secrets.LLM_GATEWAY_KEY }}
+          LLM_GATEWAY_MODEL: ${{ secrets.LLM_GATEWAY_MODEL }}
+        run: |
+          root="${LLM_GATEWAY_URL%/}"; root="${root%/v1}"
+          echo "agent endpoint: $root/v1/messages"
+
+          # $1 = request body. Echoes the HTTP status; leaves the response
+          # body in $RUNNER_TEMP/body.json for the error branches to print.
+          # curl's own %{http_code} is already 000 when the request never got a
+          # response, so do NOT add a `|| echo 000` fallback on top -- that
+          # concatenates and reports "HTTP 000000".
+          probe() {
+            local code=""
+            code="$(curl -sS --max-time 60 -o "$RUNNER_TEMP/body.json" -w '%{http_code}' \
+              -X POST "$root/v1/messages" \
+              -H "Authorization: Bearer $LLM_GATEWAY_KEY" \
+              -H "anthropic-version: 2023-06-01" \
+              -H "content-type: application/json" \
+              -d "$1" 2>/dev/null)" || true
+            echo "${code:-000}"
+          }
+
+          # 000 means no HTTP response at all, which is a connectivity fault
+          # rather than anything about the model -- the two preceding steps
+          # should have caught it, so say so plainly instead of blaming the pin.
+          explain_000() {
+            echo "::error::no HTTP response from $root/v1/messages -- the gateway was unreachable on the Anthropic route, even though the judge route answered. Check the Tailnet grant and that the host serves both routes."
+          }
+
+          plain='{"model":"'"$LLM_GATEWAY_MODEL"'","max_tokens":16,"messages":[{"role":"user","content":"ping"}]}'
+          code="$(probe "$plain")"
+          if [ "$code" = "000" ]; then explain_000; exit 1; fi
+          if [ "$code" != "200" ]; then
+            echo "::error::the Anthropic-compatible route rejected a MINIMAL request for '$LLM_GATEWAY_MODEL' (HTTP $code). The model is allow-listed but this route cannot serve it -- check that LLM_GATEWAY_MODEL names a model group routed to an Anthropic-capable backend."
+            sed 's/^/  /' "$RUNNER_TEMP/body.json" >&2 || true
+            exit 1
+          fi
+          echo "minimal request: 200"
+
+          # Claude Code sends an extended-thinking block. A backend can answer
+          # the minimal request above and still 500 on this one, which is the
+          # failure this whole step exists for -- so probe it explicitly rather
+          # than inferring it. max_tokens must exceed budget_tokens.
+          thinking='{"model":"'"$LLM_GATEWAY_MODEL"'","max_tokens":1200,"thinking":{"type":"enabled","budget_tokens":1024},"messages":[{"role":"user","content":"ping"}]}'
+          code="$(probe "$thinking")"
+          if [ "$code" = "000" ]; then explain_000; exit 1; fi
+          if [ "$code" != "200" ]; then
+            echo "::error::'$LLM_GATEWAY_MODEL' serves a plain request but FAILS one with extended thinking enabled (HTTP $code). Claude Code sends thinking on its very first call, so every case would fail this way. Point LLM_GATEWAY_MODEL at a model group that supports thinking; a small local model generally does not. It can still serve the judge -- set JUDGE_MODEL to it separately."
+            sed 's/^/  /' "$RUNNER_TEMP/body.json" >&2 || true
+            exit 1
+          fi
+          echo "thinking request: 200 -- the agent route can serve this model."
 
       - name: Run the judged sweep
         env:
@@ -274,7 +355,12 @@ jobs:
           # JUDGE_MODEL overrides the placeholder each checks.toml declares.
           LLM_GATEWAY_URL: ${{ secrets.LLM_GATEWAY_URL }}
           JUDGE_API_KEY: ${{ secrets.LLM_GATEWAY_KEY }}
-          JUDGE_MODEL: ${{ secrets.LLM_GATEWAY_MODEL }}
+          # Falls back to the agent pin when unset. They are separate because the
+          # roles differ: the agent needs a thinking-capable model on the
+          # Anthropic route, the judge only needs a competent instruct model on
+          # the OpenAI one -- so a model too small to drive the agent can still
+          # be a perfectly good (and much cheaper) judge.
+          JUDGE_MODEL: ${{ secrets.JUDGE_MODEL || secrets.LLM_GATEWAY_MODEL }}
         run: |
           root="${LLM_GATEWAY_URL%/}"; root="${root%/v1}"
           export ANTHROPIC_BASE_URL="$root"
