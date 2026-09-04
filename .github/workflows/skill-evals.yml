@@ -390,6 +390,19 @@ jobs:
           # the OpenAI one -- so a model too small to drive the agent can still
           # be a perfectly good (and much cheaper) judge.
           JUDGE_MODEL: ${{ secrets.JUDGE_MODEL || secrets.LLM_GATEWAY_MODEL }}
+          # Claude Code's "small/fast" slot -- session titles, compaction
+          # summaries, quick classifiers. Left unset the CLI asks for its own
+          # default haiku id, which this gateway does not register: a 404 the
+          # CLI then retries with exponential backoff, which is how a previous
+          # run spent ~4.6 min of pure sleep per affected call. A plain `-p`
+          # run was measured making exactly one request, on the main model, so
+          # this is insurance rather than a fix for an observed failure -- but
+          # the downside is minutes of wall clock and the cost is one env line.
+          # DEFAULT_HAIKU is the current name, SMALL_FAST the legacy alias;
+          # both are still read by the CLI (2.1.259), so both are set.
+          # Defaults to the agent pin, so no secret is required to be correct.
+          ANTHROPIC_SMALL_FAST_MODEL: ${{ secrets.ANTHROPIC_SMALL_FAST_MODEL || secrets.LLM_GATEWAY_MODEL }}
+          ANTHROPIC_DEFAULT_HAIKU_MODEL: ${{ secrets.ANTHROPIC_SMALL_FAST_MODEL || secrets.LLM_GATEWAY_MODEL }}
         run: |
           root="${LLM_GATEWAY_URL%/}"; root="${root%/v1}"
           export ANTHROPIC_BASE_URL="$root"
