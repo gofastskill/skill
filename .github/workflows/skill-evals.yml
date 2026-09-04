@@ -146,15 +146,37 @@ jobs:
   # below are limited to the two this job installs a CLI for.
   # ----------------------------------------------------------------------------
   live-eval:
-    name: Judged sweep (real agent + judge, over the Tailnet)
+    name: Sweep ${{ matrix.suite }} (real agent + judge, over the Tailnet)
+    # Dispatch-only, deliberately. Nothing schedules this and nothing should: it
+    # drives a real agent against a real gateway for hours, and a run nobody is
+    # waiting on is a run nobody reads.
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    # 42 cases across the three suites, so `trials` N means 42N agent runs plus
-    # one judge call per correctness trial. At 60 minutes even trials=1 did not
-    # finish; trials=5 is 210 runs and needs the headroom. This is a backstop
-    # against a wedged agent, not a target -- the preflights below are what catch
-    # a misconfiguration, in seconds rather than by running out the clock.
-    timeout-minutes: 180
+    strategy:
+      # One suite's failure must not cancel the others. They are independent
+      # measurements and a partial sweep is still worth its artifact -- the
+      # scorecard job below is what decides whether the whole is scoreable.
+      fail-fast: false
+      matrix:
+        # 42 cases across the three suites, so `trials` N means 42N agent runs
+        # plus one judge call per correctness trial. Run 33914096408 measured
+        # trials=1 at 76 min sequentially, which puts trials=5 near 6.3h --
+        # past GitHub's HARD 6h per-job ceiling, which `timeout-minutes` cannot
+        # raise. The suites share nothing until the scorecard, so each gets its
+        # own runner and the long pole drops to consultation alone.
+        #
+        # Timeouts are backstops against a wedged agent, not targets; they are
+        # per-suite so a hung restraint run (5 min observed) is caught in
+        # minutes instead of hiding inside a ceiling sized for consultation.
+        # Ordered longest-first so the critical path starts first.
+        include:
+          - suite: consultation   # 22 cases; 52 min at trials=1
+            timeout: 330
+          - suite: correctness    # 12 cases, judged; 18 min at trials=1
+            timeout: 180
+          - suite: restraint      #  8 cases;  5 min at trials=1
+            timeout: 90
+    timeout-minutes: ${{ matrix.timeout }}
     permissions:
       contents: read
       # Required by tailscale/github-action to mint an OIDC token for OAuth.
@@ -407,10 +429,56 @@ jobs:
           root="${LLM_GATEWAY_URL%/}"; root="${root%/v1}"
           export ANTHROPIC_BASE_URL="$root"
           export AIKIT_LLM_URL="$root/v1"
-          ./evals/v2/run.sh "${{ inputs.agent }}" ./eval-runs/v2 "${{ inputs.trials }}"
+          # Naming the suite runs only that one AND suppresses the scorecard:
+          # every metric in metrics.toml is scoped to a case prefix, and a metric
+          # matching nothing is a hard error, so a subset cannot score itself.
+          # The scorecard job below folds the three back together.
+          ./evals/v2/run.sh "${{ inputs.agent }}" ./eval-runs/v2 \
+            "${{ inputs.trials }}" "${{ matrix.suite }}"
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: eval-run-${{ inputs.agent }}
+          name: eval-run-${{ inputs.agent }}-${{ matrix.suite }}
           path: eval-runs/
+
+  # ----------------------------------------------------------------------------
+  # Fold the per-suite runs into one scorecard and apply the gates. This is the
+  # only job with an opinion: its exit status is the sweep's verdict.
+  #
+  # It needs no gateway, no key and no Tailnet -- the judge already ran inside
+  # the correctness job and its verdicts are recorded in that suite's artifact.
+  # Scoring is pure local computation over the downloaded run directories.
+  # ----------------------------------------------------------------------------
+  scorecard:
+    name: Scorecard (fold the suites, apply the gates)
+    needs: live-eval
+    # Runs even when a suite job failed, so a partial sweep produces a named
+    # diagnosis instead of a silently skipped job. scorecard.sh refuses a root
+    # that is missing a suite and says which one.
+    if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install FastSkill CLI
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/gofastskill/fastskill/main/scripts/install.sh | bash
+          fastskill --version
+
+      # Each suite job uploaded the contents of its own eval-runs/, so the three
+      # artifacts hold disjoint paths under v2/ and merge back into the exact
+      # layout run.sh writes for a single-machine sweep.
+      - name: Reassemble the run directories
+        uses: actions/download-artifact@v4
+        with:
+          pattern: eval-run-${{ inputs.agent }}-*
+          merge-multiple: true
+          path: eval-runs
+
+      - name: Show what came back
+        run: find eval-runs -maxdepth 2 -mindepth 1 | sort
+
+      - name: Score the sweep
+        run: ./evals/v2/scorecard.sh ./eval-runs/v2

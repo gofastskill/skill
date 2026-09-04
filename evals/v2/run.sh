@@ -12,14 +12,40 @@
 #   JUDGE_MODEL     optional; overrides the model every judge declares. The committed default
 #                   is a placeholder and has to exist on whatever AIKIT_LLM_URL serves.
 #
-# Usage: run.sh <agent> <out-dir> [trials]
+# Naming a suite runs only that one. CI does this to put each suite on its own runner --
+# 42 cases at trials=5 is ~6.3h sequentially, past GitHub's hard 6h per-job ceiling, and the
+# suites share nothing until the scorecard. A subset run deliberately does NOT score itself:
+# the metrics in metrics.toml span all three suites, and a metric matching no case is a hard
+# error (EVAL_SCORECARD_EMPTY_METRIC), so scoring `restraint` alone would fail on the two
+# judge_score metrics rather than tell you anything. Fold the parts with scorecard.sh instead.
+#
+# Usage: run.sh <agent> <out-dir> [trials] [suite...]
 set -euo pipefail
 
-AGENT="${1:?usage: run.sh <agent> <out-dir> [trials]}"
-OUT="${2:?usage: run.sh <agent> <out-dir> [trials]}"
+AGENT="${1:?usage: run.sh <agent> <out-dir> [trials] [suite...]}"
+OUT="${2:?usage: run.sh <agent> <out-dir> [trials] [suite...]}"
 TRIALS="${3:-5}"
+shift $(( $# < 3 ? $# : 3 ))
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+all_suites=(consultation restraint correctness)
+
+# No suite named => the full sweep, which scores itself. Any subset => the caller is
+# assembling a sweep out of parts and scorecard.sh is what has the opinion.
+if (($#)); then
+  suites=("$@")
+  for suite in "${suites[@]}"; do
+    if [[ ! -d "$HERE/$suite" ]]; then
+      echo "no such suite: '$suite' (have: ${all_suites[*]})" >&2
+      exit 2
+    fi
+  done
+  score_at_end=0
+else
+  suites=("${all_suites[@]}")
+  score_at_end=1
+fi
 
 # Anchor OUT before anything derives from it. Every suite below runs from inside a throwaway
 # skill tree staged elsewhere (stage.sh), so a relative out-dir resolves against *that* tree
@@ -36,8 +62,6 @@ mkdir -p "$STAGE"
 echo "=== vacuity guard ==="
 python3 "$HERE/guard_vacuity.py"
 echo
-
-suites=(consultation restraint correctness)
 
 # Which suites are judged, decided before anything runs. correctness is last, so a missing
 # key found at its turn would surface only after the other two had been paid for in full.
@@ -65,7 +89,7 @@ for suite in "${suites[@]}"; do
 
   printf '  %-14s ' "$suite"
   # --no-fail: this is a measurement, not a gate (spec 001 P6). A failing case is data.
-  # The gates live in metrics.toml and are applied once, below, over all three runs.
+  # The gates live in metrics.toml and are applied once, by scorecard.sh, over all three.
   if (cd "$skill_dir" && fastskill eval run \
         --agent "$AGENT" \
         --output-dir "$OUT/$suite" \
@@ -77,11 +101,11 @@ for suite in "${suites[@]}"; do
   fi
 done
 
+if ((score_at_end)); then
+  echo
+  exec "$HERE/scorecard.sh" "$OUT"
+fi
+
 echo
-echo "=== scorecard ==="
-# Exit status is the scorecard's: a gate below its bar, or a metric that matched no case,
-# fails this script. That is the one place the sweep is allowed to have an opinion.
-#
-# The two `judge_score` metrics are the reason `--judge` above is not optional in practice: a
-# metric that matches nothing is a hard error, so an unjudged correctness run fails here.
-fastskill eval scorecard --root "$OUT" --metrics "$HERE/metrics.toml"
+echo "=== ran ${#suites[@]} of ${#all_suites[@]} suite(s); not scoring a subset ==="
+echo "fold this with the others: $HERE/scorecard.sh <dir containing all three>"
