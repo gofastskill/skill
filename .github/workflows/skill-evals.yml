@@ -190,6 +190,20 @@ jobs:
           # substitute: the Tailscale-issued cert is for the DNS name.
           args: --accept-dns=true
 
+      # tailscale/github-action retries `tailscale up` five times and then falls
+      # out of its loop -- the step reports SUCCESS even when every attempt was
+      # refused. This job's first two runs "connected" that way and then died at
+      # the preflight with an unresolvable host, which reads as a DNS fault and
+      # is not one. Assert the join rather than trusting the green check.
+      - name: Assert the Tailnet join actually happened
+        run: |
+          if ! ip="$(tailscale ip -4 2>/dev/null)" || [ -z "$ip" ]; then
+            echo "::error::not on the Tailnet. The connect step above reports success even when every attempt failed -- read its log for the real reason. A 403 'calling actor does not have enough permissions' means the OAuth client either lacks the auth_keys write scope, or is not authorized for tag:ci in the ACL."
+            tailscale status || true
+            exit 1
+          fi
+          echo "on the Tailnet as $ip"
+
       - name: Install FastSkill CLI
         run: |
           curl -fsSL https://raw.githubusercontent.com/gofastskill/fastskill/main/scripts/install.sh | bash
