@@ -340,6 +340,35 @@ jobs:
           if [ "$code" != "200" ]; then
             echo "::error::'$LLM_GATEWAY_MODEL' serves a plain request but FAILS one with extended thinking enabled (HTTP $code). Claude Code sends thinking on its very first call, so every case would fail this way. Point LLM_GATEWAY_MODEL at a model group that supports thinking; a small local model generally does not. It can still serve the judge -- set JUDGE_MODEL to it separately."
             sed 's/^/  /' "$RUNNER_TEMP/body.json" >&2 || true
+
+            # "Pick a different model" is not actionable without knowing which
+            # ones would work, and the answer is not guessable from the names --
+            # this gateway registers its groups by role (chat-default,
+            # tools-default, vision-*) in the LiteLLM DB, not in git, so there is
+            # nothing to read. Probe the rest of the allow-list and say. Runs
+            # only on this failure path, so the healthy case pays nothing.
+            echo "probing the rest of the allow-list for a thinking-capable model:"
+            others="$(curl -fsS --max-time 30 \
+              -H "Authorization: Bearer $LLM_GATEWAY_KEY" \
+              "$root/v1/models" 2>/dev/null \
+              | jq -r '.data[]?.id' | grep -v '^embed' | head -12 || true)"
+            found=""
+            for m in $others; do
+              [ "$m" = "$LLM_GATEWAY_MODEL" ] && continue
+              body='{"model":"'"$m"'","max_tokens":1200,"thinking":{"type":"enabled","budget_tokens":1024},"messages":[{"role":"user","content":"ping"}]}'
+              c="$(probe "$body")"
+              if [ "$c" = "200" ]; then
+                echo "  PASS  $m"
+                found="$found $m"
+              else
+                echo "  fail  $m (HTTP $c)"
+              fi
+            done
+            if [ -n "$found" ]; then
+              echo "::error::set LLM_GATEWAY_MODEL to one of:$found"
+            else
+              echo "::error::no model in this key's allow-list can serve an extended-thinking request. This is not fixable by repointing the secret -- the gateway needs a thinking-capable model group registered (LiteLLM admin UI), and the virtual key needs it in scope. Embedding models were skipped."
+            fi
             exit 1
           fi
           echo "thinking request: 200 -- the agent route can serve this model."
