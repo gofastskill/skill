@@ -1,17 +1,17 @@
 ---
 name: fastskill
-version: 1.1.0
-description: Package manager and operational toolkit for Claude Code-compatible skills. Use this skill when installing, managing, discovering, or analyzing skills; configuring repositories; running skill evaluations (`fastskill eval`) or the optimization loop (`fastskill optimize`); serving skills over HTTP/MCP; or building marketplace catalogs. See references/eval.md for eval setup in full.
+version: 1.2.0
+description: Package manager and operational toolkit for Claude Code-compatible skills. Use this skill when installing, managing, discovering, bundling, or analyzing skills; configuring repositories; running skill evaluations (`fastskill eval`) or the optimization loop (`fastskill optimize`); serving skills over HTTP/MCP; or building marketplace catalogs. See references/eval.md for eval setup in full.
 license: Apache-2.0
 ---
 
 # FastSkill
 
-FastSkill is a package manager and operational toolkit for Claude Code-compatible skills. It provides discovery, installation, versioning, semantic search, quality evals, and a local HTTP/MCP server for skills at scale.
+FastSkill is a package manager and operational toolkit for Claude Code-compatible skills. It provides discovery, installation, versioning, self-contained team bundles, semantic search, quality evals, and a local HTTP/MCP server for skills at scale.
 
 ## Overview
 
-FastSkill follows Anthropic's standardized `SKILL.md` skill layout and adds a manifest (`skill-project.toml`), a lockfile (`skills.lock`), semantic search, evaluation suites, an optimization loop, and repository/marketplace tooling. Modern agents (Claude Code, Cursor, …) read installed skills directly from the skills directory — **there is no metadata-file sync step**.
+FastSkill follows Anthropic's standardized `SKILL.md` skill layout and adds a manifest (`skill-project.toml`), a lockfile (`skills.lock`), self-contained bundles, semantic search, evaluation suites, an optimization loop, and repository/marketplace tooling. Modern agents (Claude Code, Cursor, …) read installed skills directly from the skills directory — **there is no metadata-file sync step**.
 
 ## Installation
 
@@ -204,6 +204,43 @@ fastskill install --only prod     # only the prod group
 fastskill install --without dev   # everything except the dev group
 ```
 
+### Building and managing team bundles
+
+A bundle is a versioned ZIP containing selected skills, their dependency closure, resources, and
+content digests. Declare every member in both `[bundle.members]` and `[dependencies]`:
+
+```toml
+[bundle]
+format = "fastskill-bundle-v1"
+id = "platform-team"
+version = "1.0.0"
+
+[bundle.members.code-review]
+overridable = false
+
+[dependencies]
+code-review = "2.1.0"
+```
+
+Build, install, inspect, update, and remove the bundle:
+
+```bash
+fastskill bundle build --output dist
+fastskill add dist/platform-team-1.0.0.zip
+fastskill list --bundles
+fastskill update --bundle platform-team --from ./platform-team-1.1.0.zip
+fastskill remove --bundle platform-team --force
+```
+
+Bundle build validates installed member versions against their dependency declarations.
+`fastskill install --lock` restores the exact bundle release recorded in `skills.lock`. Do not
+remove a bundle member with ordinary `fastskill remove <skill-id>`; remove its owning bundle.
+For an allowed customization, set `overridable = true` and run:
+
+```bash
+fastskill bundle override code-review --from ./my-code-review
+```
+
 ### Listing, reading, and removing skills
 
 ```bash
@@ -212,7 +249,7 @@ fastskill list --json             # machine-readable
 fastskill read my-skill-id        # print the skill's SKILL.md
 fastskill read my-skill-id --meta # metadata only
 fastskill read my-skill-id --tree # dependency tree
-fastskill remove my-skill-id      # uninstall and update manifest + lock
+fastskill remove my-skill-id      # uninstall unless an installed bundle owns it
 ```
 
 `fastskill <skill-id>` is shorthand for `fastskill read <skill-id>`.
