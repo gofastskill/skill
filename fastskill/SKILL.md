@@ -1,7 +1,7 @@
 ---
 name: fastskill
-version: 1.2.0
-description: Package manager and operational toolkit for Claude Code-compatible skills. Use this skill when installing, managing, discovering, bundling, or analyzing skills; configuring repositories; running skill evaluations (`fastskill eval`) or the optimization loop (`fastskill optimize`); serving skills over HTTP/MCP; or building marketplace catalogs. See references/eval.md for eval setup in full.
+version: 1.3.0
+description: Package manager and operational toolkit for Claude Code-compatible skills. Use this skill when installing, managing, discovering, bundling, or analyzing skills; configuring repositories; running skill evaluations (`fastskill eval validate/run/judge/report/score/scorecard`) or the optimization loop (`fastskill optimize`); serving skills over HTTP/MCP; or building marketplace catalogs. See references/eval.md for eval setup in full.
 license: Apache-2.0
 ---
 
@@ -54,16 +54,26 @@ Semantic search is the only feature that needs the embedding section. Everything
 
 ```toml
 # skill-project.toml  (minimum for reindex + search)
+schema_version = "1"
+
+[dependencies]
+
+[tool.fastskill]
+skills_directory = ".claude/skills"
+
 [tool.fastskill.embedding]
 openai_base_url = "https://api.openai.com/v1"
 embedding_model = "text-embedding-3-small"
 ```
 
-Required environment variable for embeddings: **`OPENAI_API_KEY`**. `skills_directory` is not required for `reindex`/`search` if skills are already installed under the default `.claude/skills/` path.
+Required environment variable for embeddings: **`OPENAI_API_KEY`**. Local search falls back to
+keyword matching when embeddings are not configured.
 
 ### Configuration file structure
 
 ```toml
+schema_version = "1"
+
 [metadata]
 id = "my-skill"
 version = "1.0.0"
@@ -89,6 +99,7 @@ priority = 0
 
 ```
 skill-project.toml
+├── schema_version = "1"    — current on-disk manifest schema; write this in new manifests
 ├── [metadata]              — skill identity (required when authoring/publishing a skill)
 │     id                   — string, unique skill ID (no slashes; scope is a separate concept)
 │     version              — semver string
@@ -131,16 +142,20 @@ Configuration is stored **only** in `skill-project.toml`. FastSkill does not rea
 
 ```bash
 export OPENAI_API_KEY="your-key-here"        # embeddings / semantic search
-export FASTSKILL_API_URL="https://registry.example.com"   # default registry target
 ```
 
-Additional: `REGISTRY_INDEX_PATH` (override index path), `FASTSKILL_NO_PROGRESS` (disable progress bars), `FASTSKILL_AUTH_TOKEN` / `FASTSKILL_TOKEN` (registry auth token, checked by `doctor`). Repository PAT auth reads a per-repo `env_var` (default `PAT_TOKEN`).
+Additional: `REGISTRY_INDEX_PATH` overrides the local index path and `FASTSKILL_NO_PROGRESS`
+disables reindex progress bars. `doctor` recognizes `FASTSKILL_AUTH_TOKEN` or `FASTSKILL_TOKEN`;
+repository authentication reads the `env_var` configured on that repository (default
+`PAT_TOKEN`).
 
 ## Skill evaluations (evals)
 
 The CLI runs **skill evaluations**: prompts from a CSV, optional deterministic **checks** (TOML), agent execution via aikit-sdk, and timestamped artifact directories. Configuration lives in `[tool.fastskill.eval]` inside `skill-project.toml`. Cases run **isolated by default** — a per-case scratch workspace containing only the skill under test (needs `SKILL.md` + `[metadata].id`; opt out with `--no-isolation`) — so trigger rates measure the skill, not the machine.
 
-**You MUST** follow the dedicated guide for CSV and checks schema, CLI commands (`eval validate`, `eval run`, `eval report`, `eval score`), pass/fail rules, and packaging notes:
+**You MUST** follow the dedicated guide for CSV, checks, judges, scorecards, CLI commands
+(`eval validate`, `eval run`, `eval judge`, `eval report`, `eval score`, `eval scorecard`), and
+pass/fail rules:
 
 - **[Skill evals guide](references/eval.md)** — setup, prompts CSV, `checks.toml`, agents, artifacts, CI.
 
@@ -210,6 +225,8 @@ A bundle is a versioned ZIP containing selected skills, their dependency closure
 content digests. Declare every member in both `[bundle.members]` and `[dependencies]`:
 
 ```toml
+schema_version = "1"
+
 [bundle]
 format = "fastskill-bundle-v1"
 id = "platform-team"
@@ -271,10 +288,16 @@ fastskill reindex --force         # force a full re-index
 
 fastskill search "powerpoint presentation"        # remote catalogs (default)
 fastskill search "data processing" --local        # installed skills
-fastskill search "charts" --local --limit 5 --format json
+fastskill search "charts" --local --limit 5 --json
+fastskill search "deploy service" --local --paths --json --content preview
+fastskill read deployment-skill                    # retrieve the full selected skill
 ```
 
 Search needs an embedding provider (`[tool.fastskill.embedding]` + `OPENAI_API_KEY`) for semantic ranking; without it, local search falls back to keyword matching. Add/install/update/remove auto-reindex when `auto_reindex = true` (skipped silently if no embedding provider is configured); use `--no-reindex` to opt out.
+
+For agent workflows, prefer `--local --paths --json --content preview` to discover candidate skill
+files, then `fastskill read <id>` for the selected skill. Use `--content full` only when the caller
+needs all matching documents in one response.
 
 ## Repository management
 
@@ -412,8 +435,9 @@ All application routes are versioned under **`/api/v1/…`** (requests to `/api/
 ### MCP server (expose FastSkill to your agent)
 
 ```bash
-# Run an MCP server that exposes every CLI command as a tool `fastskill.<path>`
+# Read tools are exposed by default; mutating tools require --enable-write
 fastskill mcp serve --transport stdio
+fastskill mcp serve --transport stdio --enable-write
 fastskill mcp serve --transport http --port 8080 --path /mcp
 
 # Write MCP server config into an agent's config
@@ -422,6 +446,25 @@ fastskill mcp list
 ```
 
 `mcp install` supports agents `claude`, `cursor`, `gemini`, `copilot`, `opencode`, and `codex`, at `--scope project` or `global`.
+
+Without `--enable-write`, mutating tools are hidden from `tools/list` and rejected if called.
+
+## Cache and automation utilities
+
+```bash
+fastskill cache info                  # cache path, entries, and disk usage
+fastskill cache info --json
+fastskill cache clean                 # clear every cached source
+fastskill cache clean --source git    # git | registry | local | zip
+fastskill cache clean --json
+
+fastskill completion bash             # bash | zsh | fish | powershell | pwsh
+fastskill spec --format json          # authoritative machine-readable CLI surface
+fastskill spec --format markdown --output fastskill-cli.md
+```
+
+Use `fastskill spec` when an integration needs current command paths, arguments, defaults, or
+examples. Do not maintain a hand-written command schema in an agent integration.
 
 ## Diagnostics
 
