@@ -180,6 +180,7 @@ fastskill eval run --agent claude --output-dir /tmp/evals --case smoke-1
 fastskill eval run --agent codex --output-dir ./evals --tag smoke --model gpt-4o
 fastskill eval run --agent codex --output-dir ./evals --trials 5 --threshold 0.8
 fastskill eval run --all --output-dir ./evals --ci
+fastskill eval run --agent claude --output-dir ./evals --judge
 fastskill eval run --agent codex --output-dir ./evals --json
 ```
 
@@ -189,6 +190,8 @@ fastskill eval run --agent codex --output-dir ./evals --json
 - **`--ci`**: pass/fail the suite on its overall pass rate vs the threshold instead of requiring zero failed cases.
 - **`--no-fail`**: still prints failures but exits `0` (for CI that only collects artifacts).
 - **`--no-isolation`**: run in the project root against the ambient agent environment (see below).
+- **`--judge`**: after deterministic scoring, run every `[[judge]]` declared in the checks file.
+- **`--judge-model <model>`**: override every judge model and record the override.
 
 Non-zero exit on suite failure unless `--no-fail`.
 
@@ -209,10 +212,44 @@ Under each run directory (one per agent):
 - **`<case-id>/trial-<n>/`**: `stdout.txt`, `stderr.txt`, `trace.jsonl`, `result.json` (`TrialResult`, including `check_results`).
 - **`<case-id>/aggregated.json`**: per-case trial aggregation (pass count, pass rate, status).
 - **`workspaces/`**: retained scratch workspaces of failed cases (isolation only).
+- **`<case-id>/trial-<n>/judgments.json`**: full judge exchanges and normalized criterion scores,
+  when the run has been judged.
 
 `eval score` needs `summary.json` to include `checks_path` (written on `eval run` when checks were configured).
 
-## 6. Report and re-score
+## 6. Judge, report, re-score, and build scorecards
+
+Declare judges in the checks file. The prompt or prompt file must render `{{output_contract}}`;
+`fastskill eval validate` checks the declaration before a paid request is made.
+
+```toml
+[judge_defaults]
+model = "gpt-4.1"
+base_url = "https://api.openai.com/v1"
+api_key_env = "JUDGE_API_KEY"
+temperature = 0.0
+
+[[judge]]
+name = "quality"
+prompt_file = "judge-prompt.md"
+
+[[judge.criterion]]
+name = "clarity"
+kind = "scale"
+scale = 5
+description = "The response is direct, precise, and easy to apply."
+```
+
+Judge a completed per-agent run, or pass `--judge` to `eval run`:
+
+```bash
+fastskill eval judge --run-dir ./eval-runs/2026-04-07T12-00-00Z/codex
+fastskill eval judge --run-dir ./eval-runs/latest/codex --judge-model gpt-4.1
+fastskill eval judge --run-dir ./eval-runs/latest/codex --rejudge
+```
+
+Judging caches an identical request unless `--rejudge` is set. A judge error still exits non-zero
+when `--no-fail` is present because the measurement is missing.
 
 ```bash
 fastskill eval report --run-dir ./eval-runs/2026-04-07T12-00-00Z/codex
@@ -229,6 +266,35 @@ fastskill eval score --run-dir ./eval-runs/2026-04-07T12-00-00Z/codex
 
 **Note:** `eval score` applies `file_exists` relative to **`skill_project_root`** from `summary.json` — not per-case `workspace_subdir`, and not the (deleted) scratch workspace the case originally ran in. If you rely on workspace-specific files, prefer re-running `eval run` or align check paths with that root. A run whose `summary.json` contains zero cases refuses to re-score (`EVAL_EMPTY_SUITE`).
 
+Fold multiple run directories into named metrics and threshold gates:
+
+```bash
+fastskill eval scorecard --root ./eval-runs --metrics ./evals/metrics.toml
+fastskill eval scorecard --root ./eval-runs --metrics ./evals/metrics.toml --format html -o report.html
+fastskill eval scorecard --format html --from june.json --from july.json -o trend.html
+```
+
+```toml
+[[metric]]
+name = "Skill-open rate"
+kind = "check_rate"
+checks = ["skill_invoked"]
+min_rate = 0.85
+
+[[metric]]
+name = "Answer quality"
+kind = "judge_score"
+judges = ["quality"]
+min_score = 0.7
+
+suites = ["./suites/consultation", "./suites/restraint"]
+```
+
+The other metric kind is `tool_calls_p95` with `max`. Scorecards reject mixed targets, mixed
+judge identities, and duplicate case IDs unless the matching `--allow-*` option is explicit. Use
+`--format json` for an archival `fastskill.scorecard/1` document or `--format html` for a
+self-contained report.
+
 ## 7. Packaging and CI
 
 - The CLI has no `package`/`publish` command. If you ship the skill by other means (Git, ZIP, a registry pipeline), keep prompts/checks under `evals/` or another path you leave out of the shipped artifact if you treat evals as repo-only.
@@ -239,7 +305,9 @@ fastskill eval score --run-dir ./eval-runs/2026-04-07T12-00-00Z/codex
 1. `[tool.fastskill.eval]` with existing `prompts` CSV path.
 2. `SKILL.md` beside `skill-project.toml` and `[metadata].id` set (required by default-on isolation).
 3. CSV header: `id`, `prompt`, `should_trigger` (+ optional `tags`, `workspace_subdir`).
-4. Optional `checks` TOML with `[[check]]` and correct `name` / fields — use `skill_invoked` (not a bare-name `trigger_expectation`) to assert your skill fired.
+4. Optional checks TOML with `[[check]]`; use `skill_invoked` to assert your skill fired. Add
+   `[[judge]]` and criteria when deterministic evidence does not measure answer quality.
 5. `fastskill eval validate` (and optionally `--agent <key>`).
 6. `fastskill eval run --agent <key> --output-dir <dir>`.
-7. Inspect `summary.json` (including its `isolation` report) and per-case `trial-<n>/result.json` / `trace.jsonl`.
+7. Inspect `summary.json` (including its `isolation` report) and per-case `trial-<n>/result.json` /
+   `trace.jsonl`; use `eval scorecard` for durable release gates and trend reports.
