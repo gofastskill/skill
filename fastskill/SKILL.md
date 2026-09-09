@@ -1,6 +1,6 @@
 ---
 name: fastskill
-version: 1.3.0
+version: 1.3.1
 description: Package manager and operational toolkit for Claude Code-compatible skills. Use this skill when installing, managing, discovering, bundling, or analyzing skills; configuring repositories; running skill evaluations (`fastskill eval validate/run/judge/report/score/scorecard`) or the optimization loop (`fastskill optimize`); serving skills over HTTP/MCP; or building marketplace catalogs. See references/eval.md for eval setup in full.
 license: Apache-2.0
 ---
@@ -179,8 +179,10 @@ fastskill add ./local-skill -e
 # Every skill under a local folder (recursive)
 fastskill add ./skills -r
 
-# From a registry with version
-fastskill add scope/pptx@1.0.0
+# From a configured repository. Omitted version and @latest select the newest stable release.
+fastskill add scope/pptx --repository official
+fastskill add scope/pptx@latest --repository official
+fastskill add scope/pptx@1.0.0 --repository official
 
 # From git with branch/tag
 fastskill add https://github.com/org/skill.git --branch main
@@ -188,7 +190,16 @@ fastskill add https://github.com/org/skill.git --tag v1.0.0
 
 # Add to a group
 fastskill add https://github.com/org/skill.git --group dev
+
+# Preview without changing state, or use only local/cached inputs
+fastskill add scope/pptx --repository official --dry-run --json
+fastskill add ./local-skill --offline
 ```
+
+Use `ID@VERSION` for exact pins; `ID`, `ID@latest`, and wildcard references select the newest
+stable compatible release. Prereleases are selected only by an explicit prerelease version or
+constraint. A repository name is required when a bare ID could otherwise be ambiguous, and the
+selected repository is retained in the Manifest and Lock provenance.
 
 ### Installing from the manifest
 
@@ -210,14 +221,20 @@ web-scraper = { origin = { type = "git", url = "https://github.com/org/web-scrap
 > silently upgraded in memory, but it's slated for removal — write new manifests with
 > `origin`.
 
-Install:
+Install. Ordinary install resolves the Manifest while retaining compatible locked selections;
+strict install restores only verified facts already covered by the Lock:
 
 ```bash
-fastskill install                 # apply the manifest, update skills.lock
-fastskill install --lock          # install exact versions from skills.lock (reproducible)
+fastskill install                 # resolve desired state, retaining compatible locked pins
+fastskill install --lock          # restore exact verified Lock facts; fail on incomplete coverage
 fastskill install --only prod     # only the prod group
 fastskill install --without dev   # everything except the dev group
+fastskill install --offline       # prohibit network access; use verified local/cached inputs
+fastskill install --dry-run --json
 ```
+
+Roots without an explicit group belong to the implicit `default` group. Unknown group names are
+errors. The same `--only` and `--without` selection rules apply with and without `--lock`.
 
 ### Building and managing team bundles
 
@@ -256,13 +273,19 @@ For an allowed customization, set `overridable = true` and run:
 
 ```bash
 fastskill bundle override code-review --from ./my-code-review
+fastskill bundle override code-review --reset
 ```
+
+`--reset` validates the complete ownership plan, restores the packaged member, and removes the
+personal override declaration. Use `--dry-run --json` to inspect override and reset plans.
 
 ### Listing, reading, and removing skills
 
 ```bash
 fastskill list                    # list installed skills with reconciliation status
 fastskill list --json             # machine-readable
+fastskill list --check            # return nonzero when selected managed state needs repair
+fastskill list --check --only prod
 fastskill read my-skill-id        # print the skill's SKILL.md
 fastskill read my-skill-id --meta # metadata only
 fastskill read my-skill-id --tree # dependency tree
@@ -274,11 +297,19 @@ fastskill remove my-skill-id      # uninstall unless an installed bundle owns it
 ### Updating skills
 
 ```bash
-fastskill update                  # update all skills from their recorded source
-fastskill update my-skill-id      # update one skill
-fastskill update --check          # report what would change without writing
-fastskill update --dry-run        # preview
+fastskill update                                  # update all skills from recorded intent
+fastskill update my-skill-id                      # update one skill
+fastskill update my-skill-id --strategy patch     # latest | patch | minor | major
+fastskill update my-skill-id --to-version 1.4.0 --repository official
+fastskill update --check --json                   # resolve and report without writing
+fastskill update --dry-run                        # validated preview
+fastskill update --offline                        # prohibit network access
 ```
+
+`--to-version` requires one repository-backed skill and an exact semantic version. `--repository`
+also requires one repository-backed skill. `--source` is a deprecated alias of `--repository`.
+Exact Manifest pins do not widen; ranged selections stay within their recorded constraint unless
+an explicit version change is requested.
 
 ### Semantic search
 
