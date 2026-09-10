@@ -100,7 +100,7 @@ jobs:
 
             ```bash
             # Install this skill
-            fastskill add https://github.com/${{ github.repository }}.git
+            fastskill skill add https://github.com/${{ github.repository }}.git
             ```
 
             ## Contents

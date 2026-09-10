@@ -2,7 +2,7 @@ schema_version = "1"
 
 [metadata]
 id = "fastskill"
-version = "1.3.1"
+version = "2.0.0"
 name = "fastskill"
 description = "Package manager and operational toolkit for AI Agent skills. This skill should be used when installing, managing, discovering, bundling, or analyzing skills; configuring repositories; performing semantic search; running skill evaluations or the optimization loop; serving skills over HTTP/MCP; or building marketplace catalogs."
 author = "Alexandre Oliveira"

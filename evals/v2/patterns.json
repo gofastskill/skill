@@ -159,7 +159,7 @@
     {
       "id": "c-tag-pin",
       "prompt": "Install the skill at https://github.com/acme/widgets.git, pinned to the release tagged v2.1.0. Give me the exact command.",
-      "expected": "fastskill add https://github.com/acme/widgets.git --tag v2.1.0",
+      "expected": "fastskill skill add https://github.com/acme/widgets.git --tag v2.1.0",
       "require": [
         "--tag v2.1.0"
       ]
@@ -167,7 +167,7 @@
     {
       "id": "c-branch-pin",
       "prompt": "Install the skill at https://github.com/acme/widgets.git from its release-42 branch. Give me the exact command.",
-      "expected": "fastskill add https://github.com/acme/widgets.git --branch release-42",
+      "expected": "fastskill skill add https://github.com/acme/widgets.git --branch release-42",
       "require": [
         "--branch release-42"
       ]
@@ -175,7 +175,7 @@
     {
       "id": "c-group-add",
       "prompt": "Add https://github.com/acme/widgets.git to my project but keep it in a dependency group called qa. Give me the exact command.",
-      "expected": "fastskill add https://github.com/acme/widgets.git --group qa",
+      "expected": "fastskill skill add https://github.com/acme/widgets.git --group qa",
       "require": [
         "--group qa"
       ]
@@ -183,7 +183,7 @@
     {
       "id": "c-install-only",
       "prompt": "My manifest has several dependency groups. Install only the group named staging. Give me the exact command.",
-      "expected": "fastskill install --only staging",
+      "expected": "fastskill project install --only staging",
       "require": [
         "--only staging"
       ]
@@ -191,7 +191,7 @@
     {
       "id": "c-install-without",
       "prompt": "Install everything in my manifest except the group named docs. Give me the exact command.",
-      "expected": "fastskill install --without docs",
+      "expected": "fastskill project install --without docs",
       "require": [
         "--without docs"
       ]
@@ -199,7 +199,7 @@
     {
       "id": "c-serve-port",
       "prompt": "Start the fastskill server on port 9123 and allow state-changing endpoints. Give me the exact command.",
-      "expected": "fastskill serve --port 9123 --enable-write",
+      "expected": "fastskill server serve --port 9123 --enable-write",
       "require": [
         "--port 9123"
       ]
@@ -207,7 +207,7 @@
     {
       "id": "c-search-limit",
       "prompt": "Search my installed skills for invoice parsing. I want at most 3 results. Give me the exact command.",
-      "expected": "fastskill search \"invoice parsing\" --local --limit 3",
+      "expected": "fastskill skill search \"invoice parsing\" --local --limit 3",
       "require": [
         "--limit 3"
       ]
@@ -215,7 +215,7 @@
     {
       "id": "c-analyze-threshold",
       "prompt": "Report near-duplicate skills in my collection using a similarity threshold of 0.97. Give me the exact command.",
-      "expected": "fastskill analyze duplicates --threshold 0.97",
+      "expected": "fastskill analysis duplicates --threshold 0.97",
       "require": [
         "--threshold 0.97"
       ]
@@ -239,7 +239,7 @@
     {
       "id": "c-repos-priority",
       "prompt": "Register an HTTP registry named acme-reg at https://reg.acme.io/index and give it priority 7. Give me the exact command.",
-      "expected": "fastskill repos add acme-reg --repo-type http-registry https://reg.acme.io/index --priority 7",
+      "expected": "fastskill repo add acme-reg --repo-type http-registry https://reg.acme.io/index --priority 7",
       "require": [
         "--priority 7"
       ]

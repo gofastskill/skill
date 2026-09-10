@@ -21,6 +21,7 @@ them, and CI regenerates and diffs to prove it was not tried.
 ```bash
 python3 evals/v2/build.py          # regenerate suites from patterns.json
 python3 evals/v2/guard_vacuity.py  # prove no check can pass on a mere read
+python3 scripts/check-command-namespaces.py  # prove expected answers use the canonical tree
 
 export AIKIT_LLM_URL=https://…/v1  # the judge's endpoint — there is no default
 export JUDGE_API_KEY=…             # its key, named by api_key_env in checks.toml

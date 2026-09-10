@@ -24,9 +24,15 @@ from the `fastskill/` directory so path resolution finds that manifest and `../e
 ## Development
 
 1. Edit files in the `fastskill/` subdirectory (and `evals/` when extending the suite)
-2. Open a pull request from a branch off the latest `origin/main` (see `CLAUDE.md`) —
+2. Run `python3 -m unittest scripts/test_command_namespaces.py` and
+   `python3 scripts/check-command-namespaces.py` from the repository root
+3. Open a pull request from a branch off the latest `origin/main` (see `CLAUDE.md`) —
    changes land via PR with required status checks, not by pushing to `main` directly
-3. On merge, the CI/CD workflow automatically packages and publishes a new release
+4. On merge, the CI/CD workflow automatically packages and publishes a new release
+
+The syntax check is deterministic and does not need a FastSkill binary. Before releasing,
+repeat the eval validation and fixture scoring below with the candidate FastSkill binary on
+`PATH`; the installed public release may still expose the previous breaking command tree.
 
 ## Evaluations
 
@@ -91,7 +97,8 @@ a check that contradicts the column is rejected rather than silently resolved. S
 
 `.github/workflows/skill-evals.yml` gates changes to the skill/eval files:
 
-- **validate** and **score-fixtures** run on every push/PR — deterministic, no agent, no tokens.
+- **namespace syntax**, **validate**, and **score-fixtures** run on every push/PR — deterministic,
+  no agent, no tokens.
 - **live-eval** is opt-in via *Run workflow* (`workflow_dispatch`), runs the v1 suite against a
   real agent, and needs `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` secrets.
 

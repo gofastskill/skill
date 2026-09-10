@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-This repository contains the FastSkill skill for AI Agent Skills, installed and used via the FastSkill CLI (`fastskill add https://github.com/gofastskill/skill.git`).
+This repository contains the FastSkill skill for AI Agent Skills, installed and used via the FastSkill CLI (`fastskill skill add https://github.com/gofastskill/skill.git`).
 
 ## Pull request automation
 

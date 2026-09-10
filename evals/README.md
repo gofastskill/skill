@@ -36,6 +36,8 @@ evals/
 from `fastskill/` and the fixture check runs from the repo root.
 
 ```bash
+python3 scripts/check-command-namespaces.py                    # canonical CLI syntax, no binary
+
 cd fastskill
 fastskill eval validate                                   # schema + config, no agent
 cd ..
@@ -46,6 +48,9 @@ cd fastskill                                              # live run: needs an a
 fastskill eval run --agent claude --output-dir ../eval-runs
 fastskill eval report --run-dir ../eval-runs/<timestamp>/claude
 ```
+
+Run the FastSkill commands with the candidate binary on `PATH` when validating a breaking
+CLI release. The namespace syntax check remains useful before that binary exists.
 
 `eval score` is read-only. Every number it reports is a function of the run's artifacts,
 and scoring the committed fixtures leaves the tree clean. The backfill of `command_count`
