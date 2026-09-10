@@ -44,9 +44,9 @@
     {
       "id": "eval-skill",
       "status": "passed",
-      "command_count": 2,
+      "command_count": 1,
       "input_tokens": 6,
-      "output_tokens": 1778,
+      "output_tokens": 35,
       "pass_count": 1,
       "total_trials": 1,
       "pass_rate": 1.0,

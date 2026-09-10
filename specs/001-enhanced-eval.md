@@ -216,26 +216,26 @@ Metric: **answer accuracy**.
 
 | id | operation |
 |---|---|
-| `op-init` | `init` |
-| `op-add-git` | `add` from git |
-| `op-add-editable` | `add -e` |
-| `op-add-recursive` | `add -r` |
-| `op-install-manifest` | `install` |
-| `op-install-lock` | `install --lock` |
-| `op-list` | `list` |
-| `op-read` | `read` |
-| `op-remove` | `remove` |
-| `op-update` | `update` |
-| `op-reindex` | `reindex` |
-| `op-search` | `search` |
-| `op-repos-add` | `repos add` |
-| `op-repos-browse` | `repos skills` / `show` |
+| `op-init` | `project init` |
+| `op-add-git` | `skill add` from git |
+| `op-add-editable` | `skill add -e` |
+| `op-add-recursive` | `skill add -r` |
+| `op-install-manifest` | `project install` |
+| `op-install-lock` | `project install --lock` |
+| `op-list` | `skill list` |
+| `op-read` | `skill read` |
+| `op-remove` | `skill remove` |
+| `op-update` | `skill update` |
+| `op-reindex` | `index rebuild` |
+| `op-search` | `skill search` |
+| `op-repos-add` | `repo add` |
+| `op-repos-browse` | `repo skills` / `repo show` |
 | `op-marketplace` | `marketplace create` |
-| `op-analyze` | `analyze duplicates` |
-| `op-optimize` | `optimize run` |
-| `op-serve` | `serve` |
+| `op-analyze` | `analysis duplicates` |
+| `op-optimize` | `optimization run` |
+| `op-serve` | `server serve` |
 | `op-mcp` | `mcp install` |
-| `op-doctor` | `doctor` |
+| `op-doctor` | `cli doctor` |
 | `op-eval` | `eval run` |
 | `op-auth` | repository authentication model |
 

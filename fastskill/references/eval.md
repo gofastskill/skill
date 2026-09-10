@@ -21,7 +21,8 @@ Evals run repeatable prompts against a real agent. By default each case runs **i
 
    If you get this for a key spelled correctly, install that agent's CLI — the `Available:` list reports what was found locally, so it differs from machine to machine and from the list above.
 
-Evals do **not** require embedding or `OPENAI_API_KEY` unless your workflow also uses `reindex` / `search`.
+Evals do **not** require embedding or `OPENAI_API_KEY` unless your workflow also uses
+`fastskill index rebuild` or `fastskill skill search`.
 
 ## 1. Configure `skill-project.toml`
 

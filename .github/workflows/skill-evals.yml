@@ -4,9 +4,15 @@ on:
   push:
     branches: [main]
     paths:
+      - 'README.md'
+      - 'CONTRIBUTING.md'
+      - 'CLAUDE.md'
+      - 'fastskill/SKILL.md'
       - 'fastskill/skill-project.toml'
       - 'fastskill/references/eval.md'
       - 'evals/**'
+      - 'scripts/**'
+      - 'specs/**'
       - '.github/workflows/skill-evals.yml'
   # No `paths:` filter here on purpose. `validate` and `score-fixtures` are
   # required status checks, and a required check that is skipped by a path
@@ -45,6 +51,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Validate canonical command namespaces
+        run: |
+          python3 -m unittest scripts/test_command_namespaces.py
+          python3 scripts/check-command-namespaces.py
       - name: Install FastSkill CLI
         run: |
           curl -fsSL https://raw.githubusercontent.com/gofastskill/fastskill/main/scripts/install.sh | bash
