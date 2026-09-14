@@ -2,6 +2,8 @@
 
 This guide matches the FastSkill CLI implementation: configuration is read from `skill-project.toml`, cases from a prompts CSV, optional scoring rules from a checks TOML, and execution uses **aikit-sdk** (`run_agent_events`) with a supported agent CLI.
 
+For designing or repairing those files, use the [authoring workflow](eval-authoring.md).
+
 ## What evals are for
 
 Evals run repeatable prompts against a real agent. By default each case runs **isolated**: the skill under test is deployed alone into a per-case scratch workspace, and the agent's user-level skill discovery is suppressed where the backend supports it — so trigger rates measure your skill, not whatever else is installed on the machine. Each run records stdout, stderr, a JSONL trace, and per-case results under a timestamped run directory. Optional **checks** assert properties of that output (skill invocation, substring expectations, file presence, tool-call count).
@@ -21,8 +23,10 @@ Evals run repeatable prompts against a real agent. By default each case runs **i
 
    If you get this for a key spelled correctly, install that agent's CLI — the `Available:` list reports what was found locally, so it differs from machine to machine and from the list above.
 
-Evals do **not** require embedding or `OPENAI_API_KEY` unless your workflow also uses
-`fastskill index rebuild` or `fastskill skill search`.
+Deterministic validation and scoring need no model credential. Target execution needs the
+selected runtime's authentication; native judging separately needs its configured endpoint,
+model, and `api_key_env` credential. That variable may be `OPENAI_API_KEY` if explicitly
+selected in the judge configuration. Embedding configuration is unrelated to these prerequisites.
 
 ## 1. Configure `skill-project.toml`
 
@@ -169,7 +173,8 @@ Parse/load errors: `EVAL_CHECKS_INVALID`.
 ### Scoring rules when checks are present
 
 - Timeout, or failure to launch the agent at all: case status **`error`** with a message (checks are not used to override that).
-- If **`checks` is empty** (no file or file loads zero checks): pass iff exit code is `0`.
+- If **`checks` is empty** (no file or file loads zero checks): the implicit `should_trigger`
+  expectation still applies. Exit code `0` alone does not establish a pass.
 - If checks are loaded: case **`passed`** only if every **required** check passed; `required = false` results are reported but advisory.
 - A suite that parses to **zero cases** refuses to run (`EVAL_EMPTY_SUITE`) instead of reporting a vacuous `0/0 PASSED`.
 

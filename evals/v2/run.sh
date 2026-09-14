@@ -54,9 +54,7 @@ fi
 # one RUNNER ERROR per suite, then EVAL_SCORECARD_NO_RUNS from a scorecard with nothing to read.
 mkdir -p "$OUT"
 OUT="$(cd "$OUT" && pwd)"
-STAGE="$OUT/.stage"
-
-mkdir -p "$STAGE"
+STAGE="$(mktemp -d "$OUT/.stage-XXXXXX")"
 
 # The guard is a precondition, not a formality: without it the numbers are meaningless.
 echo "=== vacuity guard ==="
@@ -79,6 +77,7 @@ if ((${#judged[@]})); then
 fi
 
 echo "=== running ${#suites[@]} suite(s) against '$AGENT', $TRIALS trial(s) per case ==="
+runner_errors=0
 for suite in "${suites[@]}"; do
   skill_dir="$("$HERE/stage.sh" "$suite" "$STAGE/$suite" "$TRIALS" | tail -1)"
 
@@ -98,14 +97,19 @@ for suite in "${suites[@]}"; do
     tail -3 "$OUT/$suite.log" | grep -oE '[0-9]+/[0-9]+ passed' | tail -1 || echo "done"
   else
     echo "RUNNER ERROR (see $OUT/$suite.log)"
+    runner_errors=$((runner_errors + 1))
   fi
 done
 
 if ((score_at_end)); then
   echo
-  exec "$HERE/scorecard.sh" "$OUT"
+  score_status=0
+  "$HERE/scorecard.sh" "$OUT" || score_status=$?
+  if ((runner_errors)); then exit 1; fi
+  exit "$score_status"
 fi
 
 echo
 echo "=== ran ${#suites[@]} of ${#all_suites[@]} suite(s); not scoring a subset ==="
 echo "fold this with the others: $HERE/scorecard.sh <dir containing all three>"
+if ((runner_errors)); then exit 1; fi
