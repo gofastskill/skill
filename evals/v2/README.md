@@ -55,6 +55,11 @@ CI runs the three suites on parallel runners for the wall clock — 42 cases at 
 
 which is also how to re-fold a sweep already on disk without re-running it.
 
+Each invocation stages into a fresh `.stage-*` directory under the output root. Keep that
+directory while retaining run artifacts: saved judging resolves the original staged project.
+`stage.sh` refuses an existing destination, and `run.sh` exits nonzero on runtime errors
+even when only a subset was selected. Model-quality failures remain reportable via `--no-fail`.
+
 ## Three suites, not fourteen
 
 Correctness used to be twelve single-case suites. A suite's checks applied to all of its

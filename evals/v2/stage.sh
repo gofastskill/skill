@@ -20,13 +20,20 @@ TRIALS="${3:-5}"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SKILL_SRC="$(cd "$HERE/../.." && pwd)/fastskill"
 
-if [[ ! -d "$HERE/$SUITE" ]]; then
+case "$SUITE" in consultation|restraint|correctness) ;; *)
   echo "stage.sh: no suite '$SUITE' at $HERE/$SUITE" >&2
   exit 1
-fi
+esac
 
-rm -rf "$DEST"
-mkdir -p "$DEST/evals"
+# Refuse existing paths, including dangling symlinks. Staging must never erase
+# user files or overwrite a previous run's project, which saved judging needs.
+if [[ -e "$DEST" || -L "$DEST" ]]; then
+  echo "stage.sh: destination already exists: $DEST; choose a fresh directory" >&2
+  exit 1
+fi
+mkdir -p -- "$(dirname -- "$DEST")"
+mkdir -- "$DEST"
+mkdir -- "$DEST/evals"
 cp -r "$SKILL_SRC" "$DEST/fastskill"
 
 # The whole suite directory, not just the two files the engine always reads: a

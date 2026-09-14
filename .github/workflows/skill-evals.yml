@@ -7,9 +7,7 @@ on:
       - 'README.md'
       - 'CONTRIBUTING.md'
       - 'CLAUDE.md'
-      - 'fastskill/SKILL.md'
-      - 'fastskill/skill-project.toml'
-      - 'fastskill/references/eval.md'
+      - 'fastskill/**'
       - 'evals/**'
       - 'scripts/**'
       - 'specs/**'
@@ -26,11 +24,8 @@ on:
       agent:
         description: 'Agent CLI to run live evals with'
         type: choice
-        # claude is the default because checks.toml's required `skill_invoked`
-        # check needs structured Skill tool-use events in the trace, which the
-        # codex backend never emits (codex has no Skill tool concept). A codex
-        # live run will always fail the suite; the option remains only for
-        # diagnostic runs of the non-trigger checks.
+        # Both installed runtimes can supply consultation evidence. Check the
+        # installed FastSkill version's runtime observability before a sweep.
         options: [claude, codex]
         default: claude
       trials:
@@ -63,6 +58,8 @@ jobs:
         run: |
           cd fastskill
           fastskill eval validate
+      - name: Validate authoring assets and packaged example
+        run: python3 -m unittest scripts/test_eval_authoring.py scripts/test_eval_scripts.py
 
   # ----------------------------------------------------------------------------
   # Deterministic, always-on: the spec-001 v2 suites. `validate` above reads the

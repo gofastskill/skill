@@ -1,7 +1,7 @@
 ---
 name: fastskill
-version: 2.0.0
-description: Package manager and operational toolkit for Claude Code-compatible skills. Use this skill when installing, managing, discovering, bundling, or analyzing skills; configuring repositories; running skill evaluations (`fastskill eval validate/run/judge/report/score/scorecard`) or the optimization loop (`fastskill optimization`); serving skills over HTTP/MCP; or building marketplace catalogs. See references/eval.md for eval setup in full.
+version: 2.1.0
+description: Package manager and operational toolkit for Claude Code-compatible skills. Use this skill when installing, managing, discovering, bundling, or analyzing skills; configuring repositories; authoring, repairing, or running skill evaluation suites; using the optimization loop; serving skills over HTTP/MCP; or building marketplace catalogs.
 license: Apache-2.0
 ---
 
@@ -158,6 +158,11 @@ The CLI runs **skill evaluations**: prompts from a CSV, optional deterministic *
 pass/fail rules:
 
 - **[Skill evals guide](references/eval.md)** — setup, prompts CSV, `checks.toml`, agents, artifacts, CI.
+
+For creating or repairing a suite, follow [Eval authoring](references/eval-authoring.md).
+It covers coverage decisions, outcome versus adherence checks, judge calibration, authorized
+pilots, and continuation from saved files. The [invoice example](examples/invoice-extraction/)
+is a copyable project; copy it outside the installed skill before editing or running it.
 
 ## Basic usage
 

@@ -15,16 +15,18 @@ gofastskill/skill/
 └── fastskill/                    # Shippable skill
     ├── SKILL.md                  # Skill documentation
     ├── skill-project.toml        # Metadata + [tool.fastskill.eval] → ../evals/*
-    └── references/               # eval.md and other reference material
+    ├── references/               # eval.md, eval-authoring.md and supporting references
+    └── examples/                 # Copyable authoring projects included in the ZIP
 ```
 
-There is a single `skill-project.toml` (inside `fastskill/`). Run FastSkill commands
+The main `skill-project.toml` is inside `fastskill/`; copyable examples have their own
+manifests. Run the skill's regression commands
 from the `fastskill/` directory so path resolution finds that manifest and `../evals/`.
 
 ## Development
 
 1. Edit files in the `fastskill/` subdirectory (and `evals/` when extending the suite)
-2. Run `python3 -m unittest scripts/test_command_namespaces.py` and
+2. Run `python3 -m unittest discover -s scripts -p 'test_*.py'` and
    `python3 scripts/check-command-namespaces.py` from the repository root
 3. Open a pull request from a branch off the latest `origin/main` (see `CLAUDE.md`) —
    changes land via PR with required status checks, not by pushing to `main` directly
@@ -99,16 +101,18 @@ a check that contradicts the column is rejected rather than silently resolved. S
 
 - **namespace syntax**, **validate**, and **score-fixtures** run on every push/PR — deterministic,
   no agent, no tokens.
-- **live-eval** is opt-in via *Run workflow* (`workflow_dispatch`), runs the v1 suite against a
-  real agent, and needs `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` secrets.
-
-No CI job runs `evals/v2/` — at roughly $6 and an hour per sweep it belongs on a schedule or a
-manual trigger, and nothing enforces its thresholds yet.
+- **validate-v2** regenerates and validates the three v2 suites and runs the vacuity guard
+  on every PR, without model calls.
+- **live-eval** is dispatch-only and runs the three v2 suites in parallel over Tailscale.
+  It needs the gateway and Tailscale secrets named in the workflow; **scorecard** then applies
+  the configured thresholds. It is not scheduled and does not run on a PR.
+- Authoring assets and the packaged example are checked by `scripts/test_eval_authoring.py`.
+  Authoring test scenarios live under `evals/authoring/fixtures/`, outside the skill ZIP.
 
 `.github/workflows/publish-skill.yml`:
 
 - Detects changes to `fastskill/` directory
-- Packages skill using FastSkill CLI
+- Packages the complete `fastskill/` directory as a ZIP
 - Creates a GitHub release with the packaged skill artifact
 - Uses GitHub App token for release operations
 
