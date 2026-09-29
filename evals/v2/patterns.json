@@ -249,9 +249,7 @@
       "prompt": "Publish my finished skill to the public fastskill registry so other people can install it by name.",
       "expected": "There is no command. FastSkill ships no publish, auth or package command, so any `fastskill publish ...` is invented. The correct answer says so and points at the distribution paths that exist: git or zip URL, a marketplace catalog built with `fastskill marketplace create`, or handing the artifact to the registry operator.",
       "require": [],
-      "forbid": [
-        "fastskill publish"
-      ]
+      "forbid": []
     }
   ],
   "judge": {
@@ -275,7 +273,7 @@
       {
         "name": "would_run",
         "kind": "bool",
-        "description": "Every subcommand, flag and argument in the answer exists in fastskill and is spelled correctly, so the command as written would execute rather than be rejected as an unknown argument. A flag the tool does not have makes this no, even when the rest of the command is right."
+        "description": "Every recommended subcommand, flag and argument exists in fastskill and is spelled correctly. A nonexistent flag makes this no. For an unsupported operation, an explicit refusal with a supported distribution alternative is valid; mentioning a nonexistent command to explain that it does not exist is not recommending it. This is a reference-based judgment, not execution proof."
       },
       {
         "name": "no_unrequested_side_effects",

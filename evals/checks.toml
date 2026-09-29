@@ -12,9 +12,9 @@
 # *mentions* the skill; `skill_invoked` only passes when a `Skill` tool call
 # with an identifying field equal to "fastskill" is present.
 #
-# NOTE: this requires an agent whose backend emits structured Skill tool-use
-# events (claude). codex has no Skill tool concept, so its traces can never
-# satisfy this check — run live evals with --agent claude.
+# A supported backend can also provide consultation evidence through tool inputs
+# referencing the recorded skill document path. Validate the selected runtime;
+# local runtime support does not establish CI authentication for that runtime.
 [[check]]
 name = "skill_invoked"
 skill = "fastskill"

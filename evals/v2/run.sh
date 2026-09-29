@@ -68,6 +68,8 @@ for suite in "${suites[@]}"; do
   if grep -q '^\[\[judge\]\]' "$HERE/$suite/checks.toml"; then judged+=("$suite"); fi
 done
 judge_model=()
+target_model=()
+if [[ -n "${TARGET_MODEL:-}" ]]; then target_model=(--model "$TARGET_MODEL"); fi
 if ((${#judged[@]})); then
   : "${AIKIT_LLM_URL:?${judged[*]}: a judge needs an endpoint — set AIKIT_LLM_URL}"
   : "${JUDGE_API_KEY:?${judged[*]}: a judge needs a key — set JUDGE_API_KEY}"
@@ -91,6 +93,7 @@ for suite in "${suites[@]}"; do
   # The gates live in metrics.toml and are applied once, by scorecard.sh, over all three.
   if (cd "$skill_dir" && fastskill eval run \
         --agent "$AGENT" \
+        "${target_model[@]}" \
         --output-dir "$OUT/$suite" \
         "${judge[@]}" \
         --no-fail >"$OUT/$suite.log" 2>&1); then

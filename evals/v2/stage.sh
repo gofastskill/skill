@@ -20,7 +20,7 @@ TRIALS="${3:-5}"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SKILL_SRC="$(cd "$HERE/../.." && pwd)/fastskill"
 
-case "$SUITE" in consultation|restraint|correctness) ;; *)
+case "$SUITE" in consultation|restraint|correctness|smoke) ;; *)
   echo "stage.sh: no suite '$SUITE' at $HERE/$SUITE" >&2
   exit 1
 esac

@@ -36,14 +36,13 @@ cases = ["off-*"]
 checks = ["skill_invoked"]
 min_rate = 0.90
 
-# Both correctness check types fold into accuracy: eleven cases assert the answer contains
-# the right flag, and c-no-publish asserts it does not recommend publishing. Either way the
-# question is whether the answer was right.
+# These are trace-fragment checks, not semantic accuracy. c-no-publish is judge-only:
+# refusing a nonexistent command must be allowed to mention its name.
 [[metric]]
-name = "Answer accuracy"
+name = "Required-fragment match rate (not semantic accuracy)"
 kind = "check_rate"
-cases = ["c-*"]
-checks = ["command_contains", "trigger_expectation"]
+cases = ["c-tag-pin", "c-branch-pin", "c-group-add", "c-install-only", "c-install-without", "c-serve-port", "c-search-limit", "c-analyze-threshold", "c-marketplace-baseurl", "c-mcp-cursor", "c-repos-priority"]
+checks = ["command_contains"]
 min_rate = 0.80
 
 [[metric]]

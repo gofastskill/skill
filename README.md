@@ -24,6 +24,19 @@ included in the released skill ZIP. See the [assessment and ownership record](sp
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for development and release details.
 
+## Quick self-test
+
+From a clone, with FastSkill and an authenticated agent installed:
+
+```bash
+bash evals/smoke.sh claude ./smoke-results
+```
+
+Six cases, one trial each, no native judge. The output directory must be new. An optional
+third argument selects the target model. This checks consultation, restraint and trace
+fragments, **not semantic answer accuracy**, and costs agent tokens. See the
+[eval guide](evals/README.md) for the optional benchmark and authoring workflow exercises.
+
 ## License
 
 Apache-2.0
