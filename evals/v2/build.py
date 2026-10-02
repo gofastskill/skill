@@ -173,8 +173,24 @@ def main():
     body += judge(pats["judge"], d)
     (d / "checks.toml").write_text(body)
 
+    # Small, unjudged profile. This measures consultation/restraint and fragments,
+    # deliberately not semantic correctness. Keep it independent of judge secrets.
+    smoke_ids = {"op-init", "op-eval", "off-python-list", "off-npm",
+                 "c-tag-pin", "c-serve-port"}
+    rows = []
+    for suite, triggered in (("consultation", "true"), ("restraint", "false")):
+        rows.extend([cid, prompt, triggered, "smoke", ""]
+                    for cid, prompt, _ in pats[suite] if cid in smoke_ids)
+    selected = [case for case in pats["correctness"] if case["id"] in smoke_ids]
+    rows.extend([case["id"], case["prompt"], "true", "smoke", ""] for case in selected)
+    d = HERE / "smoke"
+    write_csv(d / "prompts.csv", rows)
+    (d / "checks.toml").write_text(HEADER + tool_cap(cap) + "".join(
+        command_contains(pattern, case["id"])
+        for case in selected for pattern in case["require"]))
+
     print(
-        f"generated 3 suites: consultation ({len(pats['consultation'])} cases), "
+        f"generated smoke ({len(rows)} cases) and 3 benchmark suites: consultation ({len(pats['consultation'])} cases), "
         f"restraint ({len(pats['restraint'])} cases), "
         f"correctness ({len(pats['correctness'])} cases, "
         f"1 judge with {len(pats['judge']['criteria'])} criteria)"

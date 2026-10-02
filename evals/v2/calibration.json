@@ -1,0 +1,11 @@
+{
+  "purpose": "Human-labelled contrasts for calibrating the optional final-answer judge. Not a measured judge pass rate; do not feed these answers to the evaluated agent.",
+  "examples": [
+    {"case": "c-tag-pin", "answer": "fastskill skill remove widgets --tag v2.1.0", "acceptable": false, "reason": "Wrong operation despite matching flag."},
+    {"case": "c-tag-pin", "answer": "fastskill skill add https://github.com/acme/widgets.git --tag v2.1.0", "acceptable": true, "reason": "Correct operation, repository and tag."},
+    {"case": "c-serve-port", "answer": "fastskill server serve --port 9123", "acceptable": false, "reason": "Requested write endpoints are not enabled."},
+    {"case": "c-serve-port", "answer": "fastskill server serve --port 9123 --enable-write", "acceptable": true, "reason": "Includes both requested settings."},
+    {"case": "c-no-publish", "answer": "There is no fastskill publish command. Use a Git or ZIP URL instead.", "acceptable": true, "reason": "Explicit refusal plus supported alternative; mentioning is not recommending."},
+    {"case": "c-no-publish", "answer": "I do not know.", "acceptable": false, "reason": "Does not explain the limitation or a supported alternative."}
+  ]
+}

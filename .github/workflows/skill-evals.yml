@@ -24,9 +24,9 @@ on:
       agent:
         description: 'Agent CLI to run live evals with'
         type: choice
-        # Both installed runtimes can supply consultation evidence. Check the
-        # installed FastSkill version's runtime observability before a sweep.
-        options: [claude, codex]
+        # This hosted workflow currently configures only the Claude gateway route.
+        # Codex needs its own provider/auth/model setup before being offered in CI.
+        options: [claude]
         default: claude
       trials:
         description: 'Trials per case (5 is the spec-001 default)'
@@ -59,7 +59,7 @@ jobs:
           cd fastskill
           fastskill eval validate
       - name: Validate authoring assets and packaged example
-        run: python3 -m unittest scripts/test_eval_authoring.py scripts/test_eval_scripts.py
+        run: python3 -m unittest discover -s scripts -p 'test_*.py'
 
   # ----------------------------------------------------------------------------
   # Deterministic, always-on: the spec-001 v2 suites. `validate` above reads the
@@ -92,7 +92,7 @@ jobs:
           fastskill --version
       - name: Validate each suite
         run: |
-          for suite in consultation restraint correctness; do
+          for suite in consultation restraint correctness smoke; do
             echo "--- $suite"
             dir="$(evals/v2/stage.sh "$suite" "$RUNNER_TEMP/stage-$suite" 1 | tail -1)"
             (cd "$dir" && fastskill eval validate)
@@ -110,15 +110,8 @@ jobs:
       - name: Install FastSkill CLI
         run: |
           curl -fsSL https://raw.githubusercontent.com/gofastskill/fastskill/main/scripts/install.sh | bash
-      - name: PASS fixture must score green
-        run: fastskill eval score --run-dir evals/fixtures/pass
-      - name: FAIL fixture must score red
-        run: |
-          if fastskill eval score --run-dir evals/fixtures/fail; then
-            echo "::error::FAIL fixture unexpectedly passed — checks engine regression"
-            exit 1
-          fi
-          echo "FAIL fixture correctly reported a failing suite."
+      - name: Fixtures must produce their intended check verdicts
+        run: python3 -m unittest scripts/test_eval_scoring.py
 
   # ----------------------------------------------------------------------------
   # Opt-in (workflow_dispatch): run the spec-001 v2 sweep against a REAL agent
@@ -249,12 +242,10 @@ jobs:
           curl -fsSL https://raw.githubusercontent.com/gofastskill/fastskill/main/scripts/install.sh | bash
           fastskill --version
 
-      - name: Install agent CLI (${{ inputs.agent }})
+      - name: Install and record the Claude agent CLI version
         run: |
-          case "${{ inputs.agent }}" in
-            codex)  npm install -g @openai/codex ;;
-            claude) npm install -g @anthropic-ai/claude-code ;;
-          esac
+          npm install -g @anthropic-ai/claude-code
+          claude --version
 
       # run.sh already refuses to start a sweep it cannot judge, but it only
       # checks that the variables are SET. Whether the Tailnet grant exists,
@@ -409,6 +400,7 @@ jobs:
           # ANTHROPIC_BASE_URL is derived from the root below, not passed here.
           ANTHROPIC_AUTH_TOKEN: ${{ secrets.LLM_GATEWAY_KEY }}
           ANTHROPIC_MODEL: ${{ secrets.LLM_GATEWAY_MODEL }}
+          TARGET_MODEL: ${{ secrets.LLM_GATEWAY_MODEL }}
           # The judge's half: same gateway, same key, OpenAI-compatible route.
           # JUDGE_MODEL overrides the placeholder each checks.toml declares.
           LLM_GATEWAY_URL: ${{ secrets.LLM_GATEWAY_URL }}

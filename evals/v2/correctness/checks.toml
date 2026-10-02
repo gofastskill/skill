@@ -70,13 +70,6 @@ required = true
 cases = ["c-repos-priority"]
 
 [[check]]
-name = "trigger_expectation"
-pattern = "fastskill publish"
-expected = false
-required = true
-cases = ["c-no-publish"]
-
-[[check]]
 name = "max_tool_calls"
 limit = 25
 required = true
@@ -95,7 +88,7 @@ description = "The answer gives a command that does what the prompt asked: the r
 [[judge.criterion]]
 name = "would_run"
 kind = "bool"
-description = "Every subcommand, flag and argument in the answer exists in fastskill and is spelled correctly, so the command as written would execute rather than be rejected as an unknown argument. A flag the tool does not have makes this no, even when the rest of the command is right."
+description = "Every recommended subcommand, flag and argument exists in fastskill and is spelled correctly. A nonexistent flag makes this no. For an unsupported operation, an explicit refusal with a supported distribution alternative is valid; mentioning a nonexistent command to explain that it does not exist is not recommending it. This is a reference-based judgment, not execution proof."
 
 [[judge.criterion]]
 name = "no_unrequested_side_effects"

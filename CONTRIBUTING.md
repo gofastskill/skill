@@ -41,9 +41,13 @@ repeat the eval validation and fixture scoring below with the candidate FastSkil
 The skill ships an eval suite so its trigger behavior and guidance stay correct. Config lives
 in `[tool.fastskill.eval]` in `fastskill/skill-project.toml` and points at `../evals/`.
 
+For the smallest live check run `bash evals/smoke.sh claude ./new-smoke-results` from the
+repository root (six cases, one trial, no judge). This measures consultation and fragment
+evidence, not semantic accuracy. Authoring outcome exercises are documented in the eval guide.
+
 The commands below cover the default (v1) suite, which is what CI gates. There is a second,
 larger suite under `evals/v2/` that measures recall, restraint and answer correctness across
-five trials per case; it runs on demand rather than in CI. **[`evals/README.md`](evals/README.md)
+five trials per case; live runs are opt-in, including manual CI dispatch. **[`evals/README.md`](evals/README.md)
 covers both suites and the methodology** — read it before adding or changing an eval case.
 
 ### Validate (deterministic, no agent)

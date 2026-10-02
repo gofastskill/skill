@@ -1,5 +1,41 @@
 # Evals
 
+## Start small
+
+```bash
+bash evals/smoke.sh claude ./smoke-results                 # from the repository root
+bash evals/smoke.sh claude ./another-run <target-model>    # explicit model, fresh output
+```
+
+This stages six cases (two consultation, two restraint, two command-fragment cases),
+validates the runtime, and runs one trial each without a judge. Agent authentication
+and token usage still apply. A failing check or runtime exits nonzero. Keep the output
+directory: it includes the staged project and saved results. No existing directory is overwritten.
+
+**A green smoke is not semantic correctness.** Text checks search the trace, not just
+the final answer. The benchmark metric is now named “Required-fragment match rate
+(not semantic accuracy)”. The no-publish case is judge-only for correctness: a correct
+refusal may mention a nonexistent command. The optional judge remains advisory and needs
+calibration; `v2/calibration.json` supplies labelled contrasts, not a measured pass rate.
+
+## Exercise the authoring workflow
+
+Use your chosen agent to perform a small real task; the helper does not launch models:
+
+```bash
+python3 evals/authoring/workflow.py prepare create ./authoring-create
+# Ask your agent to read authoring-create/task.md and perform that task.
+python3 evals/authoring/workflow.py verify ./authoring-create
+```
+
+Repeat with `repair` or `extend` and a fresh destination. The verifier runs the actual
+FastSkill validator, checks positive/negative cases where relevant, and verifies preserved
+files/rows and review notes. It does not certify the semantic quality of generated cases:
+review those yourself. No target pilot or judge call is authorized by these task prompts.
+Deterministic harness tests use controlled edits and must not be reported as live-agent success.
+
+## Existing benchmark suites
+
 Two suites live here. They answer different questions and neither replaces the other.
 
 | | `prompts.csv` + `checks.toml` (v1) | `v2/` (spec 001) |
@@ -7,7 +43,7 @@ Two suites live here. They answer different questions and neither replaces the o
 | Question | does the skill still trigger at all? | how well does it actually perform? |
 | Cases | 14, all positive | 42 — 22 consultation, 8 restraint, 12 correctness |
 | Trials per case | 1 | 5 |
-| Agents | `claude` only | any (baselined on `pi`) |
+| Agents | backend with observable consultation | supported local backend (historically baselined on `pi`) |
 | Judged by an LLM | no | one advisory judge, on correctness |
 | Wired into CI | yes — `eval validate` + `eval score` on every PR | the suites are validated on every PR; the sweep runs on demand |
 | Cost per run | $0 (deterministic jobs) | 42N agent runs + one judge call per correctness trial; free against a self-hosted gateway, metered against a paid API |
@@ -137,9 +173,9 @@ inherent and two have since been fixed:
    a case whose explicit checks contradict the column is rejected rather than silently
    resolved.
 
-The consequence for writing a positive check: pair a real flag with a value invented for
-that prompt. `--tag` is vacuous; `--tag v2.1.0` can only come from the agent synthesizing
-an answer.
+Pairing a flag with a scenario-specific value avoids matches in shipped documentation.
+It does not prove correctness: an incorrect operation or unrelated tool output can still
+contain that fragment. The guard is a useful contamination check, not a correctness oracle.
 
 ### A substring check cannot see the command around it
 
@@ -209,7 +245,7 @@ rather than by the directory a suite happens to live in.
 |---|---|---|---|
 | Skill-open rate | `op-*` `skill_invoked` | ≥ 0.85 | 100.0% (106/106) |
 | Restraint rate | `off-*` `skill_invoked` | ≥ 0.90 | 100.0% (40/40) |
-| Answer accuracy | `c-*` `command_contains` + `trigger_expectation` | ≥ 0.80 | 96.7% (58/60) |
+| Historical fragment score (formerly “Answer accuracy”) | old `c-*` text checks | old ≥ 0.80 | 96.7% (58/60); not comparable to revised 11-case fragment metric |
 | Tool-budget compliance | `op-*` `max_tool_calls` | ≥ 0.90 | 92.5% (98/106) |
 | Efficiency | p95 tool calls per `op-*` trial | ≤ 25 | 30 (median 8, max 50) |
 | Cost | USD per sweep | not gated | $5.81 / 210 trials |
@@ -253,10 +289,11 @@ python3 evals/v2/guard_vacuity.py                     # no check can pass on a m
 evals/v2/negctl.sh ./eval-runs/v2/consultation/<timestamp>/pi   # needs one real run
 ```
 
-`negctl.sh` is the red-green proof: it copies a real completed case, deletes the trace
-line carrying the skill read from one copy, and re-scores both. The consultation check
-must go from pass to fail while `max_tool_calls` stays put. It reads the path to delete
-out of each trial's `result.json`, so it removes the evidence the check actually reads.
+`negctl.sh` copies a real completed case, preserves its metadata, removes consultation
+tool calls and paired results from one copy, and re-scores both. Each trial's invocation
+check must flip while its tool-budget verdict stays unchanged. It uses each trial's own
+skill path (or an identifying Skill call), not one shared path for all trials. Tool-call
+counts can decrease; the invariant is the budget verdict, not an identical count.
 
 ## Adding a case
 
@@ -284,7 +321,10 @@ never matched against a trace.
   `eval validate` parses the judge and its prompt without calling anything. Advisory, not a
   required check — requiring one is a repository setting, and a required check that has never
   reported blocks every open pull request.
-- **live-eval** — the v2 sweep, over the Tailnet, against a real agent and a real judge.
+- **live-eval** — the v2 sweep, over the Tailnet, against Claude and a real judge.
+  CI offers Claude only until another agent has its own tested authentication/provider
+  configuration. Local scripts still accept supported installed runtimes. `TARGET_MODEL`
+  explicitly selects the target model for `run.sh`; it is distinct from `JUDGE_MODEL`.
   Dispatch-only: nothing schedules it and nothing should, because it runs for hours and a
   run nobody is waiting on is a run nobody reads. One job per suite, in parallel, each with
   its own `timeout-minutes` — the sweep is ~6.3 h sequentially at `trials=5`, past GitHub's

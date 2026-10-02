@@ -15,7 +15,7 @@ def shell(script, *args):
         output = tempfile.mkdtemp(prefix="shell-", dir=os.environ["KCOV_OUTPUT"])
         return [coverage, "--bash-method=DEBUG", "--configure=bash-use-basic-parser=1",
                 "--exclude-region=import sys:PY",
-                "--include-pattern=/evals/v2/", output, str(script), *args]
+                "--include-pattern=/evals/", output, str(script), *args]
     return ["bash", str(script), *args]
 
 
@@ -94,7 +94,7 @@ class EvalScriptsTests(unittest.TestCase):
             executable.chmod(0o755)
             env = dict(os.environ, PATH=str(root) + os.pathsep + os.environ["PATH"],
                        AIKIT_LLM_URL="http://unused.invalid/v1", JUDGE_API_KEY="test-only",
-                       JUDGE_MODEL="test-only")
+                       JUDGE_MODEL="test-only", TARGET_MODEL="test-target")
             for index, (suites, run_exit, score_exit) in enumerate([
                     (["consultation"], "0", "0"), ([], "0", "0"),
                     ([], "23", "0"), ([], "0", "9")]):

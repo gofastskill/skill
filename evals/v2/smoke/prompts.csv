@@ -1,0 +1,7 @@
+id,prompt,should_trigger,tags,workspace_subdir
+op-init,I'm starting a new skill project. How do I scaffold the config file?,true,smoke,
+op-eval,How do I run quality evaluations on a skill before shipping it?,true,smoke,
+off-python-list,How do I remove duplicates from a Python list while preserving order?,false,smoke,
+off-npm,How do I pin an exact dependency version in package.json with npm?,false,smoke,
+c-tag-pin,"Install the skill at https://github.com/acme/widgets.git, pinned to the release tagged v2.1.0. Give me the exact command.",true,smoke,
+c-serve-port,Start the fastskill server on port 9123 and allow state-changing endpoints. Give me the exact command.,true,smoke,

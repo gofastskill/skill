@@ -10,7 +10,13 @@ engine constraints it works around.
 |---|---|---|
 | `consultation/` | Is the skill opened when it should be? | `should_trigger = true` on every case, which generates a `skill_invoked` check |
 | `restraint/` | Is it left alone when it should be? | `should_trigger = false`, generating the same check with inverted polarity |
-| `correctness/` | Is the answer right? | one `command_contains` per case, scoped to it, on a scenario-unique flag and value — plus a judge, scored against a reference answer |
+| `correctness/` | Do expected fragments occur; what does a semantic reviewer think? | eleven scoped fragment checks plus an advisory final-answer judge on all twelve cases; no-publish is judge-only for correctness |
+
+For a quick start use `bash evals/smoke.sh claude ./new-smoke-results` from the repository
+root: six cases, one trial, no judge. The full benchmark below remains optional. Fragment
+matches are not semantic accuracy and may come from tool output rather than the final answer.
+Use `calibration.json` to challenge a selected judge before trusting its scores; those
+examples are labelled test inputs, not recorded judge results.
 
 ## Layout
 
@@ -74,8 +80,8 @@ checks file is now a header and nothing else, and it is still fully scored.
 
 Correctness cases are on-topic, so they keep `should_trigger = true` and gain the generated
 check too. That is a second, independent assertion rather than a dilution of the first: the
-scorecard keeps a rate per check type, so consulting the skill and answering correctly are
-reported as the separate things they are.
+scorecard keeps consultation and trace-fragment matches separate. Neither proves the answer
+is correct. Semantic correctness is reported separately by the optional advisory judge.
 
 ## The judge
 
@@ -153,19 +159,19 @@ Three layers, because a broken measurement is worse than no measurement:
 evals/v2/negctl.sh ./eval-runs/v2/consultation/<timestamp>/pi
 ```
 
-`negctl.sh` copies one real completed case twice, strips every trace line naming the staged
-skill path from one copy, and re-scores both with `fastskill eval score`. Measured on the
-first pi sweep, when the check was still a text expectation:
+`negctl.sh` now preserves the recorded summary, removes only consultation calls and paired
+results from a copy, and checks the specific verdict on every trial. Each trial may have
+a different skill path. The following output is historical, from the first pi sweep when
+the check was still a text expectation:
 
 ```
   present  passed 1.00 [('trigger_expectation', True),  ('max_tool_calls', True)]
   absent   failed 0.00 [('trigger_expectation', False), ('max_tool_calls', True)]
 ```
 
-Exactly one trace line per trial carries the read, and `max_tool_calls` is unmoved, so the
-flip is attributable to the consultation check alone. The check is now `skill_invoked` and
-the control reads the path it matches out of each trial's `result.json`, so it deletes the
-evidence the check reads rather than a string that resembles it.
+The current control requires `skill_invoked` to flip and the `max_tool_calls` verdict to
+stay unchanged. Removing tool calls changes the count, not necessarily the budget verdict.
+It refuses missing consultation evidence or unobservable/error trials.
 
 ## Agent support
 
